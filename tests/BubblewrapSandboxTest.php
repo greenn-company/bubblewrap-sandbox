@@ -391,6 +391,11 @@ class BubblewrapSandboxTest extends TestCase
         // Should use defaults when invalid types are provided
         $this->assertInstanceOf(BubblewrapSandboxRunner::class, $sandbox);
 
+        // Verify defaults were actually applied
+        $built = $sandbox->buildCommand(array('echo', 'test'));
+        $this->assertContains('--unshare-all', $built);
+        $this->assertContains('/usr', $built);
+
         $built = $sandbox->buildCommand(array('echo', 'test'));
         $this->assertContains('--unshare-all', $built);
         $this->assertContains('/usr', $built);
