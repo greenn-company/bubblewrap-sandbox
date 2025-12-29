@@ -220,7 +220,9 @@ class BubblewrapSandboxTest extends TestCase
 
         if ($hasLib64) {
             $this->assertContains('/lib64', $readOnly);
-        } else {
+        }
+
+        if (!$hasLib64) {
             $this->assertNotContains('/lib64', $readOnly);
         }
     }
