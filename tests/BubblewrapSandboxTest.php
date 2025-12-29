@@ -32,6 +32,11 @@ class BubblewrapSandboxTest extends TestCase
             {
                 return parent::binaryExistsInPath($binary);
             }
+
+            public function buildCommandPublic(array $command, array $extraBinds = array())
+            {
+                return $this->buildCommand($command, $extraBinds);
+            }
         };
     }
 
@@ -275,5 +280,124 @@ class BubblewrapSandboxTest extends TestCase
                 rmdir($dir);
             }
         }
+    }
+
+    public function testNormalizeBindsRejectsRelativePaths()
+    {
+        $sandbox = $this->makeExposedSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->normalizePublic(array(
+            'relative/path',
+        ));
+    }
+
+    public function testNormalizeBindsRejectsPathTraversal()
+    {
+        $sandbox = $this->makeExposedSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->normalizePublic(array(
+            '/etc/../../etc/passwd',
+        ));
+    }
+
+    public function testNormalizeBindsRejectsNullBytes()
+    {
+        $sandbox = $this->makeExposedSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->normalizePublic(array(
+            "/tmp/file\0.txt",
+        ));
+    }
+
+    public function testBuildCommandRejectsRelativePathsInBinds()
+    {
+        $sandbox = $this->makeSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->buildCommand(array('echo', 'test'), array(
+            'relative/path',
+        ));
+    }
+
+    public function testBuildCommandRejectsPathTraversalInBinds()
+    {
+        $sandbox = $this->makeSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->buildCommand(array('echo', 'test'), array(
+            '/tmp/../../etc/passwd',
+        ));
+    }
+
+    public function testProcessRejectsRelativeWorkingDirectory()
+    {
+        $sandbox = $this->makeSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->process(array('echo', 'test'), array(), 'relative/path');
+    }
+
+    public function testProcessRejectsPathTraversalInWorkingDirectory()
+    {
+        $sandbox = $this->makeSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->process(array('echo', 'test'), array(), '/tmp/../../etc');
+    }
+
+    public function testCommandValidationRejectsNonStringParts()
+    {
+        $sandbox = $this->makeSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->buildCommand(array('echo', 123));
+    }
+
+    public function testCommandValidationRejectsNullBytes()
+    {
+        $sandbox = $this->makeSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->buildCommand(array("echo\0", 'test'));
+    }
+
+    public function testConstructorRejectsEmptyBinary()
+    {
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        new BubblewrapSandboxRunner(
+            '',
+            BubblewrapSandboxRunner::defaultBaseArgs(),
+            BubblewrapSandboxRunner::defaultReadOnlyBinds(),
+            BubblewrapSandboxRunner::defaultWritableBinds()
+        );
+    }
+
+    public function testFromConfigValidatesArrayTypes()
+    {
+        $config = array(
+            'base_args' => 'not-an-array',
+            'read_only_binds' => 'not-an-array',
+            'write_binds' => 'not-an-array',
+        );
+
+        $sandbox = BubblewrapSandboxRunner::fromConfig($config);
+        // Should use defaults when invalid types are provided
+        $this->assertInstanceOf(BubblewrapSandboxRunner::class, $sandbox);
+    }
+
+    public function testAssertBubblewrapIsExecutableChecksFileExists()
+    {
+        $sandbox = new BubblewrapSandboxRunner(
+            '/nonexistent/binary/path',
+            BubblewrapSandboxRunner::defaultBaseArgs(),
+            BubblewrapSandboxRunner::defaultReadOnlyBinds(),
+            BubblewrapSandboxRunner::defaultWritableBinds()
+        );
+
+        $this->expectExceptionCompat(BubblewrapUnavailableException::class);
+        $sandbox->buildCommand(array('echo', 'test'));
     }
 }

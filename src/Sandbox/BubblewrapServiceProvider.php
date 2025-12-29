@@ -22,6 +22,10 @@ class BubblewrapServiceProvider extends ServiceProvider
         $this->app->singleton(BubblewrapSandboxRunner::class, function ($app) {
             $config = $app['config']->get('sandbox', array());
 
+            if (!is_array($config)) {
+                $config = array();
+            }
+
             return BubblewrapSandboxRunner::fromConfig($config);
         });
 

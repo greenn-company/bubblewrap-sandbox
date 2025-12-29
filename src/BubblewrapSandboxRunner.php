@@ -49,6 +49,8 @@ class BubblewrapSandboxRunner
     protected $writeBinds;
 
     /**
+     * Constructor.
+     *
      * @param string            $binary        Bubblewrap binary path or name.
      * @param array<int,string> $baseArgs      Default flags passed to bwrap.
      * @param array<int,string> $readOnlyBinds Read-only mounts.
@@ -57,6 +59,10 @@ class BubblewrapSandboxRunner
      */
     public function __construct($binary, array $baseArgs, array $readOnlyBinds, array $writeBinds, $binaryValidator = null)
     {
+        if (!is_string($binary) || $binary === '') {
+            throw new InvalidArgumentException('Binary path must be a non-empty string.');
+        }
+
         $this->binary = $binary;
         $this->baseArgs = $baseArgs;
         $this->readOnlyBinds = $readOnlyBinds;
@@ -67,16 +73,16 @@ class BubblewrapSandboxRunner
     /**
      * Build an instance from a Laravel-style config array.
      *
-     * @param array<string,mixed> $config
+     * @param array<string,mixed> $config Configuration array with keys: binary, base_args, read_only_binds, write_binds, binary_validator.
      * @return static
      */
     public static function fromConfig(array $config)
     {
-        $binary = isset($config['binary']) ? $config['binary'] : static::defaultBinary();
-        $baseArgs = isset($config['base_args']) ? $config['base_args'] : static::defaultBaseArgs();
-        $readOnly = isset($config['read_only_binds']) ? $config['read_only_binds'] : static::defaultReadOnlyBinds();
-        $writable = isset($config['write_binds']) ? $config['write_binds'] : static::defaultWritableBinds();
-        $validator = isset($config['binary_validator']) ? $config['binary_validator'] : null;
+        $binary = isset($config['binary']) && is_string($config['binary']) ? $config['binary'] : static::defaultBinary();
+        $baseArgs = isset($config['base_args']) && is_array($config['base_args']) ? $config['base_args'] : static::defaultBaseArgs();
+        $readOnly = isset($config['read_only_binds']) && is_array($config['read_only_binds']) ? $config['read_only_binds'] : static::defaultReadOnlyBinds();
+        $writable = isset($config['write_binds']) && is_array($config['write_binds']) ? $config['write_binds'] : static::defaultWritableBinds();
+        $validator = isset($config['binary_validator']) && is_callable($config['binary_validator']) ? $config['binary_validator'] : null;
 
         return new static($binary, $baseArgs, $readOnly, $writable, $validator);
     }
@@ -86,13 +92,22 @@ class BubblewrapSandboxRunner
      *
      * @param array<int,string> $command          Binary plus arguments to run inside the sandbox.
      * @param array<int,mixed>  $extraBinds       Additional bind mounts.
-     * @param string            $workingDirectory Working directory inside the sandbox.
+     * @param string|null       $workingDirectory Working directory inside the sandbox.
      * @param array|null        $env              Additional environment variables for the sandboxed process.
      * @param int|null          $timeout          Seconds before timing out. Null = no timeout.
      * @return \Symfony\Component\Process\Process
+     * @throws InvalidArgumentException If timeout is invalid.
      */
     public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
     {
+        if ($workingDirectory !== null) {
+            $this->assertValidPath($workingDirectory, 'working directory');
+        }
+
+        if ($timeout !== null && (!is_numeric($timeout) || $timeout < 0)) {
+            throw new InvalidArgumentException('Timeout must be null or a non-negative number.');
+        }
+
         $cmd = $this->buildCommand($command, $extraBinds);
         $process = new Process(
             $this->normalizeProcessCommand($cmd),
@@ -108,12 +123,13 @@ class BubblewrapSandboxRunner
     /**
      * Run a sandboxed command and throw if it fails.
      *
-     * @param array<int,string> $command
-     * @param array<int,mixed>  $extraBinds
-     * @param string            $workingDirectory
-     * @param array|null        $env
-     * @param int|null          $timeout
+     * @param array<int,string> $command          Binary plus arguments to run inside the sandbox.
+     * @param array<int,mixed>  $extraBinds       Additional bind mounts.
+     * @param string|null       $workingDirectory Working directory inside the sandbox.
+     * @param array|null        $env              Additional environment variables for the sandboxed process.
+     * @param int|null          $timeout          Seconds before timing out. Null = no timeout.
      * @return \Symfony\Component\Process\Process
+     * @throws InvalidArgumentException If timeout is invalid.
      */
     public function run(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
     {
@@ -168,10 +184,13 @@ class BubblewrapSandboxRunner
     }
 
     /**
-     * Symfony Process 3.4 expects a string, 4+ accepts arrays.
+     * Normalize command for Symfony Process compatibility.
      *
-     * @param array<int,string> $commandParts
-     * @return array<int,string>|string
+     * Symfony Process 3.4 expects a string, 4+ accepts arrays.
+     * This method ensures compatibility across versions.
+     *
+     * @param array<int,string> $commandParts Command parts as array.
+     * @return array<int,string>|string Command as array (4+) or escaped string (3.4).
      */
     protected function normalizeProcessCommand(array $commandParts)
     {
@@ -190,7 +209,10 @@ class BubblewrapSandboxRunner
     /**
      * Detect whether the installed Symfony Process version accepts array commands.
      *
-     * @return bool
+     * Symfony Process 3.4 requires string commands, while 4.0+ accepts arrays.
+     * This method detects the version capability at runtime.
+     *
+     * @return bool True if arrays are supported, false if string is required.
      */
     protected static function processAcceptsArrayCommands()
     {
@@ -293,26 +315,47 @@ class BubblewrapSandboxRunner
     }
 
     /**
-     * Ensure a command was provided.
+     * Ensure a command was provided and validate its structure.
      *
      * @param array<int, string> $command
      * @return void
+     * @throws InvalidArgumentException If the command is empty or invalid.
      */
     protected function assertCommandIsNotEmpty(array $command)
     {
         if (empty($command)) {
             throw new InvalidArgumentException('You must provide a command to run inside the sandbox.');
         }
+
+        // Validate that all command parts are strings
+        foreach ($command as $index => $part) {
+            if (!is_string($part)) {
+                throw new InvalidArgumentException(
+                    sprintf('Command part at index %d must be a string, got %s.', $index, gettype($part))
+                );
+            }
+
+            // Prevent null bytes in command parts
+            if (strpos($part, "\0") !== false) {
+                throw new InvalidArgumentException(
+                    sprintf('Command part at index %d contains null bytes.', $index)
+                );
+            }
+        }
     }
 
     /**
      * Ensure bubblewrap is available to execute.
      *
-     * @throws \SecureRun\Exceptions\BubblewrapUnavailableException
+     * @throws \SecureRun\Exceptions\BubblewrapUnavailableException If bubblewrap is not available or not executable.
      * @return void
      */
     protected function assertBubblewrapIsExecutable()
     {
+        if (!is_string($this->binary) || $this->binary === '') {
+            throw new BubblewrapUnavailableException('Bubblewrap binary path must be a non-empty string.');
+        }
+
         if ($this->binaryValidator) {
             $result = call_user_func($this->binaryValidator, $this->binary);
             if ($result === false) {
@@ -323,6 +366,10 @@ class BubblewrapSandboxRunner
 
         // If a path is provided, validate it directly and do not fall back to PATH.
         if (strpos($this->binary, '/') !== false) {
+            if (!file_exists($this->binary)) {
+                throw new BubblewrapUnavailableException('Bubblewrap binary not found: ' . $this->binary);
+            }
+
             if (!is_executable($this->binary)) {
                 throw new BubblewrapUnavailableException('Bubblewrap binary is not executable: ' . $this->binary);
             }
@@ -348,6 +395,7 @@ class BubblewrapSandboxRunner
 
         foreach ($binds as $bind) {
             if (is_string($bind)) {
+                $this->assertValidPath($bind, 'bind path');
                 $normalized[] = array(
                     'from' => $bind,
                     'to' => $bind,
@@ -357,6 +405,8 @@ class BubblewrapSandboxRunner
             }
 
             if (is_array($bind) && isset($bind['from']) && isset($bind['to'])) {
+                $this->assertValidPath($bind['from'], 'bind source path');
+                $this->assertValidPath($bind['to'], 'bind target path');
                 $normalized[] = array(
                     'from' => $bind['from'],
                     'to' => $bind['to'],
@@ -373,8 +423,41 @@ class BubblewrapSandboxRunner
     }
 
     /**
-     * @param string $binary
-     * @return bool
+     * Validate that a path is absolute and safe for use in bind mounts.
+     *
+     * @param string $path The path to validate.
+     * @param string $context Context description for error messages (e.g., 'bind source path').
+     * @return void
+     * @throws InvalidArgumentException If the path is invalid or potentially unsafe.
+     */
+    protected function assertValidPath($path, $context = 'path')
+    {
+        if (!is_string($path) || $path === '') {
+            throw new InvalidArgumentException("Invalid {$context}: path must be a non-empty string.");
+        }
+
+        // Paths must be absolute (start with /) to prevent path traversal attacks
+        if ($path[0] !== '/') {
+            throw new InvalidArgumentException("Invalid {$context}: path must be absolute (start with /), got: {$path}");
+        }
+
+        // Prevent path traversal attempts (e.g., /../../etc/passwd)
+        // Realpath will resolve symlinks and .. components, but we check for obvious attempts
+        if (strpos($path, '..') !== false) {
+            throw new InvalidArgumentException("Invalid {$context}: path contains '..' which is not allowed, got: {$path}");
+        }
+
+        // Prevent null bytes (potential security issue)
+        if (strpos($path, "\0") !== false) {
+            throw new InvalidArgumentException("Invalid {$context}: path contains null bytes, got: {$path}");
+        }
+    }
+
+    /**
+     * Check if a binary exists in the system PATH.
+     *
+     * @param string $binary Binary name to search for.
+     * @return bool True if the binary is found and executable in PATH.
      */
     protected static function binaryExistsInPath($binary)
     {
