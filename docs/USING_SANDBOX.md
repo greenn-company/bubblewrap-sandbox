@@ -31,7 +31,7 @@ Este pacote coloca comandos externos em uma “caixa de areia” (sandbox) usand
 - `binary`: caminho do bwrap (padrão `/usr/bin/bwrap`; use `bwrap` se preferir buscar no PATH).
 - `base_args`: flags de isolamento padrão (geralmente não precisa mexer).
 - `read_only_binds`: pastas montadas como leitura (padrão: `/usr`, `/bin`, `/lib`, `/sbin`, `/etc/resolv.conf`, `/etc/ssl` e adiciona `/lib64` se existir).
-- `write_binds`: pastas montadas com escrita (padrão: `/tmp`).
+- `write_binds`: pastas montadas com escrita (padrão vazio; o `/tmp` já é um tmpfs dentro do sandbox).
 
 Para ambientes não padrão, ajuste apenas `binary`. Para expor mais pastas, adicione nos binds.
 

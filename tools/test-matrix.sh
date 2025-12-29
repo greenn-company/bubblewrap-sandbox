@@ -63,7 +63,6 @@ EOF
       rsync -a --exclude vendor --exclude .git /app/ \"\$workdir/\"
       cd \"\$workdir\"
 
-      composer config --no-interaction --global audit.block-insecure false || true
       composer config --no-interaction --global allow-plugins.kylekatarnls/update-helper true || true
       rm -f composer.lock
       composer require \"illuminate/support:${laravel_constraint}\" --with-all-dependencies --no-interaction --no-progress \${COMPOSER_FLAGS:-}

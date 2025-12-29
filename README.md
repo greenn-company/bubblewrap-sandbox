@@ -85,7 +85,7 @@ Edit `config/sandbox.php` after publishing:
 - `binary`: path to `bwrap` (default `/usr/bin/bwrap`; use `bwrap` if it’s on PATH).
 - `base_args`: default flags (avoid removing unshare/die-with-parent).
 - `read_only_binds`: automatic read-only binds.
-- `write_binds`: writable binds (default only `/tmp`).
+- `write_binds`: writable binds (default empty; `/tmp` is already a sandbox tmpfs).
 
 ## Quick examples
 

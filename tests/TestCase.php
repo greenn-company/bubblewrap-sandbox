@@ -6,7 +6,7 @@ if (class_exists('\PHPUnit\Framework\TestCase')) {
     abstract class TestCase extends \PHPUnit\Framework\TestCase
     {
         /**
-         * Compat helper for modern PHPUnit (>= 6).
+         * Compat helper for PHPUnit >= 6.0 (modern).
          *
          * @param string $exception
          * @return void
@@ -20,7 +20,7 @@ if (class_exists('\PHPUnit\Framework\TestCase')) {
     abstract class TestCase extends \PHPUnit_Framework_TestCase
     {
         /**
-         * Compat helper for legacy PHPUnit (< 6).
+         * Compat helper for PHPUnit < 6.0 (legacy).
          *
          * @param string $exception
          * @return void

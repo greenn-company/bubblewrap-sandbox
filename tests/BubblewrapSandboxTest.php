@@ -99,11 +99,15 @@ class BubblewrapSandboxTest extends TestCase
 
         $localBinary = $localDir . '/bwrap';
         file_put_contents($localBinary, "#!/bin/sh\necho local");
-        @chmod($localBinary, 0644); // intentionally not executable
+        if (!chmod($localBinary, 0644)) { // intentionally not executable
+            $this->fail('Failed to set permissions on local binary');
+        }
 
         $pathBinary = $pathDir . '/bwrap';
         file_put_contents($pathBinary, "#!/bin/sh\necho path");
-        @chmod($pathBinary, 0755);
+        if (!chmod($pathBinary, 0755)) {
+            $this->fail('Failed to set permissions on PATH binary');
+        }
 
         $originalPath = getenv('PATH');
         try {
@@ -196,7 +200,7 @@ class BubblewrapSandboxTest extends TestCase
         $this->assertContains('/usr', $readOnly);
 
         $write = BubblewrapSandboxRunner::defaultWritableBinds();
-        $this->assertContains('/tmp', $write);
+        $this->assertEmpty($write);
     }
 
     public function testDefaultBinaryUsesAbsolutePath()
@@ -251,7 +255,9 @@ class BubblewrapSandboxTest extends TestCase
         mkdir($dir);
         $binary = $dir . '/dummybin';
         file_put_contents($binary, "#!/bin/sh\necho dummy");
-        @chmod($binary, 0755);
+        if (!chmod($binary, 0755)) {
+            $this->fail('Failed to set permissions on dummy binary');
+        }
 
         $originalPath = getenv('PATH');
         try {

@@ -175,16 +175,50 @@ class BubblewrapSandboxRunner
      */
     protected function normalizeProcessCommand(array $commandParts)
     {
-        if (defined(Process::class . '::VERSION') && version_compare(Process::VERSION, '4.0.0', '<')) {
-            $escaped = array();
-            foreach ($commandParts as $piece) {
-                $escaped[] = escapeshellarg($piece);
-            }
-
-            return implode(' ', $escaped);
+        if (static::processAcceptsArrayCommands()) {
+            return $commandParts;
         }
 
-        return $commandParts;
+        $escaped = array();
+        foreach ($commandParts as $piece) {
+            $escaped[] = escapeshellarg($piece);
+        }
+
+        return implode(' ', $escaped);
+    }
+
+    /**
+     * Detect whether the installed Symfony Process version accepts array commands.
+     *
+     * @return bool
+     */
+    protected static function processAcceptsArrayCommands()
+    {
+        static $supportsArray = null;
+
+        if ($supportsArray !== null) {
+            return $supportsArray;
+        }
+
+        $supportsArray = true;
+
+        if (interface_exists('Throwable')) {
+            try {
+                new Process(array('true'));
+            } catch (\Throwable $e) { // @phpstan-ignore-line PHP < 7 compat
+                $supportsArray = false;
+            }
+
+            return $supportsArray;
+        }
+
+        try {
+            new Process(array('true'));
+        } catch (\Exception $e) {
+            $supportsArray = false;
+        }
+
+        return $supportsArray;
     }
 
     /**
@@ -254,9 +288,8 @@ class BubblewrapSandboxRunner
      */
     public static function defaultWritableBinds()
     {
-        return array(
-            '/tmp',
-        );
+        // /tmp inside the sandbox is already provided by a tmpfs mount in defaultBaseArgs.
+        return array();
     }
 
     /**
@@ -345,7 +378,8 @@ class BubblewrapSandboxRunner
      */
     protected static function binaryExistsInPath($binary)
     {
-        $paths = explode(PATH_SEPARATOR, getenv('PATH'));
+        $pathEnv = getenv('PATH');
+        $paths = $pathEnv === false ? array() : explode(PATH_SEPARATOR, $pathEnv);
         foreach ($paths as $path) {
             $candidate = rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $binary;
             if (is_executable($candidate)) {

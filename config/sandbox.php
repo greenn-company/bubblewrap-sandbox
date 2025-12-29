@@ -69,6 +69,6 @@ return array(
     | Host paths exposed with write access inside the sandbox.
     */
     'write_binds' => array(
-        '/tmp',
+        // /tmp inside the sandbox is already a tmpfs via base_args. Add host paths only when needed.
     ),
 );
