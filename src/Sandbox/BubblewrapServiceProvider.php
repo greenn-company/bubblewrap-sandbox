@@ -17,12 +17,6 @@ class BubblewrapServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $config = $this->app['config'];
-
-        if (!is_array($config->get('sandbox'))) {
-            $config->set('sandbox', array());
-        }
-
         $this->mergeConfigFrom(__DIR__ . '/../../config/sandbox.php', 'sandbox');
 
         $this->app->singleton(BubblewrapSandboxRunner::class, function ($app) {

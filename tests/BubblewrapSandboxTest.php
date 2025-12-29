@@ -18,7 +18,10 @@ class BubblewrapSandboxTest extends TestCase
             PHP_BINARY,
             BubblewrapSandboxRunner::defaultBaseArgs(),
             BubblewrapSandboxRunner::defaultReadOnlyBinds(),
-            BubblewrapSandboxRunner::defaultWritableBinds()
+            BubblewrapSandboxRunner::defaultWritableBinds(),
+            function () {
+                // Skip binary validation in tests; handled by parent when needed.
+            }
         ) extends BubblewrapSandboxRunner {
             public function normalizePublic(array $binds)
             {
@@ -28,11 +31,6 @@ class BubblewrapSandboxTest extends TestCase
             public static function binaryExistsInPathPublic($binary)
             {
                 return parent::binaryExistsInPath($binary);
-            }
-
-            protected function assertBubblewrapIsExecutable()
-            {
-                // Skip to avoid relying on bwrap in tests.
             }
         };
     }
@@ -92,9 +90,57 @@ class BubblewrapSandboxTest extends TestCase
         $sandbox->buildCommand(array('echo', 'test'));
     }
 
+    public function testPathBinaryMustBeExecutableEvenWhenNameExistsInPath()
+    {
+        $localDir = sys_get_temp_dir() . '/bwrap_guard_local_' . uniqid();
+        $pathDir = sys_get_temp_dir() . '/bwrap_guard_path_' . uniqid();
+        mkdir($localDir);
+        mkdir($pathDir);
+
+        $localBinary = $localDir . '/bwrap';
+        file_put_contents($localBinary, "#!/bin/sh\necho local");
+        @chmod($localBinary, 0644); // intentionally not executable
+
+        $pathBinary = $pathDir . '/bwrap';
+        file_put_contents($pathBinary, "#!/bin/sh\necho path");
+        @chmod($pathBinary, 0755);
+
+        $originalPath = getenv('PATH');
+        try {
+            putenv('PATH=' . $pathDir . PATH_SEPARATOR . $originalPath);
+
+            $sandbox = new BubblewrapSandboxRunner(
+                $localBinary,
+                BubblewrapSandboxRunner::defaultBaseArgs(),
+                BubblewrapSandboxRunner::defaultReadOnlyBinds(),
+                BubblewrapSandboxRunner::defaultWritableBinds()
+            );
+
+            $this->expectExceptionCompat(BubblewrapUnavailableException::class);
+
+            $sandbox->buildCommand(array('echo', 'test'));
+        } finally {
+            putenv('PATH=' . $originalPath);
+            if (file_exists($localBinary)) {
+                unlink($localBinary);
+            }
+            if (file_exists($pathBinary)) {
+                unlink($pathBinary);
+            }
+            if (is_dir($localDir)) {
+                rmdir($localDir);
+            }
+            if (is_dir($pathDir)) {
+                rmdir($pathDir);
+            }
+        }
+    }
+
     public function testProcessBuildsProcessInstance()
     {
-        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array());
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests; handled elsewhere.
+        });
         $process = $sandbox->process(array('echo', 'hi'), array(), null, null, 10);
 
         $this->assertInstanceOf(Process::class, $process);
@@ -104,18 +150,15 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunUsesOverriddenProcess()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array()) extends BubblewrapSandboxRunner {
+        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests; handled elsewhere.
+        }) extends BubblewrapSandboxRunner {
             public $called = false;
 
             public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
             {
                 $this->called = true;
                 return new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, 5);
-            }
-
-            protected function assertBubblewrapIsExecutable()
-            {
-                // Skip parent validation for test.
             }
         };
 
@@ -180,7 +223,6 @@ class BubblewrapSandboxTest extends TestCase
         $normalized = $sandbox->normalizePublic(array(
             '/tmp/file',
             array('from' => '/a', 'to' => '/b'),
-            123,
         ));
 
         $this->assertCount(2, $normalized);
@@ -188,6 +230,17 @@ class BubblewrapSandboxTest extends TestCase
         $this->assertSame('/tmp/file', $normalized[0]['from']);
         $this->assertSame('/b', $normalized[1]['to']);
         $this->assertTrue($normalized[1]['read_only']);
+    }
+
+    public function testNormalizeBindsThrowsOnInvalidEntries()
+    {
+        $sandbox = $this->makeExposedSandbox();
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->normalizePublic(array(
+            '/tmp/file',
+            123,
+        ));
     }
 
     public function testBinaryExistsInPathDetectsExecutable()
@@ -201,12 +254,20 @@ class BubblewrapSandboxTest extends TestCase
         @chmod($binary, 0755);
 
         $originalPath = getenv('PATH');
-        putenv('PATH=' . $dir);
+        try {
+            putenv('PATH=' . $dir);
 
-        $this->assertTrue($sandbox::binaryExistsInPathPublic('dummybin'));
+            $this->assertTrue($sandbox::binaryExistsInPathPublic('dummybin'));
+        } finally {
+            putenv('PATH=' . $originalPath);
 
-        putenv('PATH=' . $originalPath);
-        @unlink($binary);
-        @rmdir($dir);
+            if (file_exists($binary)) {
+                unlink($binary);
+            }
+
+            if (is_dir($dir)) {
+                rmdir($dir);
+            }
+        }
     }
 }

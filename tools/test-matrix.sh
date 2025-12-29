@@ -40,12 +40,15 @@ run_combo() {
       set -euo pipefail
       release=\$( ( [ -f /etc/os-release ] && . /etc/os-release && echo \"\${VERSION_CODENAME:-}\" ) || true )
       export DEBIAN_FRONTEND=noninteractive
+      # WARNING: The following apt settings relax signature verification to keep EOL Debian images (stretch/jessie) installable.
+      # This is insecure and should be used only inside ephemeral CI containers. Do NOT mirror this in production.
       echo 'Acquire::Check-Valid-Until \"0\";' > /etc/apt/apt.conf.d/99archive
       echo 'Acquire::AllowInsecureRepositories \"true\";' >> /etc/apt/apt.conf.d/99archive
       echo 'Acquire::AllowDowngradeToInsecureRepositories \"true\";' >> /etc/apt/apt.conf.d/99archive
       echo 'Acquire::AllowWeaklyTrustedRepositories \"true\";' >> /etc/apt/apt.conf.d/99archive
       echo 'APT::Get::AllowUnauthenticated \"true\";' >> /etc/apt/apt.conf.d/99archive
       if ! apt-get update -qq; then
+        # EOL fallback: switch to archive.debian.org when the default mirrors refuse to serve old releases.
         codename=\${release:-stretch}
         cat >/etc/apt/sources.list <<EOF
 deb http://archive.debian.org/debian \${codename} main contrib non-free

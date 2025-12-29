@@ -28,6 +28,13 @@ class BubblewrapSandboxRunner
     protected $baseArgs;
 
     /**
+     * Optional binary validator callable for testability.
+     *
+     * @var callable|null
+     */
+    protected $binaryValidator;
+
+    /**
      * Directories mounted as read-only inside the sandbox.
      *
      * @var array<int, string>
@@ -46,13 +53,15 @@ class BubblewrapSandboxRunner
      * @param array<int,string> $baseArgs      Default flags passed to bwrap.
      * @param array<int,string> $readOnlyBinds Read-only mounts.
      * @param array<int,string> $writeBinds    Writable mounts.
+     * @param callable|null     $binaryValidator Optional validator callable for the binary (primarily for tests).
      */
-    public function __construct($binary, array $baseArgs, array $readOnlyBinds, array $writeBinds)
+    public function __construct($binary, array $baseArgs, array $readOnlyBinds, array $writeBinds, $binaryValidator = null)
     {
         $this->binary = $binary;
         $this->baseArgs = $baseArgs;
         $this->readOnlyBinds = $readOnlyBinds;
         $this->writeBinds = $writeBinds;
+        $this->binaryValidator = $binaryValidator;
     }
 
     /**
@@ -67,8 +76,9 @@ class BubblewrapSandboxRunner
         $baseArgs = isset($config['base_args']) ? $config['base_args'] : static::defaultBaseArgs();
         $readOnly = isset($config['read_only_binds']) ? $config['read_only_binds'] : static::defaultReadOnlyBinds();
         $writable = isset($config['write_binds']) ? $config['write_binds'] : static::defaultWritableBinds();
+        $validator = isset($config['binary_validator']) ? $config['binary_validator'] : null;
 
-        return new static($binary, $baseArgs, $readOnly, $writable);
+        return new static($binary, $baseArgs, $readOnly, $writable, $validator);
     }
 
     /**
@@ -84,7 +94,13 @@ class BubblewrapSandboxRunner
     public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
     {
         $cmd = $this->buildCommand($command, $extraBinds);
-        $process = new Process($cmd, $workingDirectory, $env, null, $timeout);
+        $process = new Process(
+            $this->normalizeProcessCommand($cmd),
+            $workingDirectory,
+            $env,
+            null,
+            $timeout
+        );
 
         return $process;
     }
@@ -149,6 +165,26 @@ class BubblewrapSandboxRunner
         }
 
         return $parts;
+    }
+
+    /**
+     * Symfony Process 3.4 expects a string, 4+ accepts arrays.
+     *
+     * @param array<int,string> $commandParts
+     * @return array<int,string>|string
+     */
+    protected function normalizeProcessCommand(array $commandParts)
+    {
+        if (defined(Process::class . '::VERSION') && version_compare(Process::VERSION, '4.0.0', '<')) {
+            $escaped = array();
+            foreach ($commandParts as $piece) {
+                $escaped[] = escapeshellarg($piece);
+            }
+
+            return implode(' ', $escaped);
+        }
+
+        return $commandParts;
     }
 
     /**
@@ -244,8 +280,26 @@ class BubblewrapSandboxRunner
      */
     protected function assertBubblewrapIsExecutable()
     {
-        if (!is_executable($this->binary) && !static::binaryExistsInPath($this->binary)) {
-            throw new BubblewrapUnavailableException('Bubblewrap (bwrap) is not available or executable: ' . $this->binary);
+        if ($this->binaryValidator) {
+            $result = call_user_func($this->binaryValidator, $this->binary);
+            if ($result === false) {
+                throw new BubblewrapUnavailableException('Bubblewrap binary failed custom validation: ' . $this->binary);
+            }
+            return;
+        }
+
+        // If a path is provided, validate it directly and do not fall back to PATH.
+        if (strpos($this->binary, '/') !== false) {
+            if (!is_executable($this->binary)) {
+                throw new BubblewrapUnavailableException('Bubblewrap binary is not executable: ' . $this->binary);
+            }
+
+            return;
+        }
+
+        // Otherwise, search for the binary name in PATH.
+        if (!static::binaryExistsInPath($this->binary)) {
+            throw new BubblewrapUnavailableException('Bubblewrap binary not found in PATH: ' . $this->binary);
         }
     }
 
@@ -275,7 +329,11 @@ class BubblewrapSandboxRunner
                     'to' => $bind['to'],
                     'read_only' => isset($bind['read_only']) ? (bool) $bind['read_only'] : true,
                 );
+                continue;
             }
+
+            // Invalid bind entry - fail fast instead of silently ignoring.
+            throw new InvalidArgumentException('Invalid bind mount format: ' . print_r($bind, true));
         }
 
         return $normalized;
