@@ -395,10 +395,6 @@ class BubblewrapSandboxTest extends TestCase
         $built = $sandbox->buildCommand(array('echo', 'test'));
         $this->assertContains('--unshare-all', $built);
         $this->assertContains('/usr', $built);
-
-        $built = $sandbox->buildCommand(array('echo', 'test'));
-        $this->assertContains('--unshare-all', $built);
-        $this->assertContains('/usr', $built);
     }
 
     public function testAssertBubblewrapIsExecutableChecksFileExists()
