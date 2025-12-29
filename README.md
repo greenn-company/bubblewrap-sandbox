@@ -35,7 +35,7 @@ php artisan vendor:publish --tag=sandbox-config
 ```php
 use SecureRun\BubblewrapSandboxRunner;
 
-$runner = app(BubblewrapSandboxRunner::class); // or the BubblewrapSandbox facade for static calls
+$runner = app(\SecureRun\BubblewrapSandboxRunner::class); // or the BubblewrapSandbox facade for static calls
 
 // Command to run inside the sandbox
 $command = array('gs', '-q', '-sDEVICE=png16m', '-o', '/tmp/out.png', '/tmp/in.pdf');

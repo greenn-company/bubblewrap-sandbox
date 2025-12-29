@@ -257,7 +257,9 @@ class BubblewrapSandboxTest extends TestCase
         $sandbox = $this->makeExposedSandbox();
 
         $dir = sys_get_temp_dir() . '/bwrap_guard_' . uniqid();
-        mkdir($dir);
+        if (!mkdir($dir)) {
+            $this->fail('Failed to create temp directory');
+        }
         $binary = $dir . '/dummybin';
         file_put_contents($binary, "#!/bin/sh\necho dummy");
         if (!chmod($binary, 0755)) {

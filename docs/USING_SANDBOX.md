@@ -55,10 +55,10 @@ $process = $sandbox->run(
 echo $process->getOutput();
 ```
 
-### Com Laravel (facade `Sandbox`)
+### Com Laravel (facade `BubblewrapSandbox`)
 
 ```php
-use SecureRun\BubblewrapSandbox;
+use SecureRun\BubblewrapSandbox; // alias registrado como BubblewrapSandbox
 
 $process = BubblewrapSandbox::run(['ls', '-la']);
 $saida = $process->getOutput();
@@ -74,7 +74,7 @@ $binds = [
     ['from' => '/var/www/storage/output', 'to' => '/var/www/storage/output', 'read_only' => false],
 ];
 
-$process = Sandbox::run(
+$process = BubblewrapSandbox::run(
     ['heif-convert', '/var/www/storage/input/photo.heic', '/var/www/storage/output/photo.png'],
     $binds,
     '/var/www/storage/input', // opcional: diretório de trabalho
@@ -94,7 +94,7 @@ $process = Sandbox::run(
 
 ```php
 try {
-    $process = Sandbox::run(['false']);
+    $process = BubblewrapSandbox::run(['false']);
 } catch (\Throwable $e) {
     // lidar com erro
 }
