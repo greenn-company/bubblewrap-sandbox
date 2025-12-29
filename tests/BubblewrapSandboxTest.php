@@ -388,6 +388,10 @@ class BubblewrapSandboxTest extends TestCase
         $sandbox = BubblewrapSandboxRunner::fromConfig($config);
         // Should use defaults when invalid types are provided
         $this->assertInstanceOf(BubblewrapSandboxRunner::class, $sandbox);
+
+        $built = $sandbox->buildCommand(array('echo', 'test'));
+        $this->assertContains('--unshare-all', $built);
+        $this->assertContains('/usr', $built);
     }
 
     public function testAssertBubblewrapIsExecutableChecksFileExists()
