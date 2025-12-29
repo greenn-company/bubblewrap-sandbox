@@ -99,17 +99,25 @@ class BubblewrapSandboxTest extends TestCase
     {
         $localDir = sys_get_temp_dir() . '/bwrap_guard_local_' . uniqid();
         $pathDir = sys_get_temp_dir() . '/bwrap_guard_path_' . uniqid();
-        mkdir($localDir);
-        mkdir($pathDir);
+        if (!mkdir($localDir)) {
+            $this->fail('Failed to create local temp directory');
+        }
+        if (!mkdir($pathDir)) {
+            $this->fail('Failed to create PATH temp directory');
+        }
 
         $localBinary = $localDir . '/bwrap';
-        file_put_contents($localBinary, "#!/bin/sh\necho local");
+        if (file_put_contents($localBinary, "#!/bin/sh\necho local") === false) {
+            $this->fail('Failed to write local binary');
+        }
         if (!chmod($localBinary, 0644)) { // intentionally not executable
             $this->fail('Failed to set permissions on local binary');
         }
 
         $pathBinary = $pathDir . '/bwrap';
-        file_put_contents($pathBinary, "#!/bin/sh\necho path");
+        if (file_put_contents($pathBinary, "#!/bin/sh\necho path") === false) {
+            $this->fail('Failed to write PATH binary');
+        }
         if (!chmod($pathBinary, 0755)) {
             $this->fail('Failed to set permissions on PATH binary');
         }
@@ -263,7 +271,9 @@ class BubblewrapSandboxTest extends TestCase
             $this->fail('Failed to create temp directory');
         }
         $binary = $dir . '/dummybin';
-        file_put_contents($binary, "#!/bin/sh\necho dummy");
+        if (file_put_contents($binary, "#!/bin/sh\necho dummy") === false) {
+            $this->fail('Failed to write dummy binary');
+        }
         if (!chmod($binary, 0755)) {
             $this->fail('Failed to set permissions on dummy binary');
         }
