@@ -64,6 +64,7 @@ Note: `SecureRun\Sandbox\BubblewrapSandbox` remains as a backwards-compatible sh
 ## Documentation
 
 - Quick usage guide: [docs/USING_SANDBOX.md](docs/USING_SANDBOX.md)
+- `run()` method parameters: [docs/PARAMETROS_RUN.md](docs/PARAMETROS_RUN.md)
 
 ### Security rules enforced
 
