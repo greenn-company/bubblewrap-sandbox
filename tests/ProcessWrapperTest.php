@@ -143,7 +143,7 @@ class ProcessWrapperTest extends TestCase
         $wrapper = new ProcessWrapper($process, null, false);
 
         // Should be able to use wrapper like Process
-        $process->run();
+        $wrapper->run();
         $this->assertEquals('test output', trim($wrapper->getOutput()));
         $this->assertTrue($wrapper->isSuccessful());
     }
