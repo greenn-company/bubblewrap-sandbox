@@ -95,10 +95,11 @@ class BubblewrapSandboxRunner
      * @param string|null       $workingDirectory Working directory inside the sandbox.
      * @param array|null        $env              Additional environment variables for the sandboxed process.
      * @param int|null          $timeout          Seconds before timing out. Null = no timeout.
-     * @return \Symfony\Component\Process\Process
+     * @param bool               $enableEnvAccess Whether to enable environment variable access in the wrapper.
+     * @return \SecureRun\ProcessWrapper Always returns ProcessWrapper for consistent return type.
      * @throws InvalidArgumentException If timeout is invalid.
      */
-    public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
+    public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
     {
         if ($workingDirectory !== null) {
             $this->assertValidPath($workingDirectory, 'working directory');
@@ -117,7 +118,9 @@ class BubblewrapSandboxRunner
             $timeout
         );
 
-        return $process;
+        // Always return ProcessWrapper for consistent return type
+        // When env access is not enabled, getEnv() will throw an exception
+        return new ProcessWrapper($process, $env, $enableEnvAccess);
     }
 
     /**
@@ -128,15 +131,23 @@ class BubblewrapSandboxRunner
      * @param string|null       $workingDirectory Working directory inside the sandbox.
      * @param array|null        $env              Additional environment variables for the sandboxed process.
      * @param int|null          $timeout          Seconds before timing out. Null = no timeout.
-     * @return \Symfony\Component\Process\Process
-     * @throws InvalidArgumentException If timeout is invalid.
+     * @param array<string,mixed> $options        Optional settings. If 'unsecure_env_access' is true, enables env access in ProcessWrapper.
+     * @return \SecureRun\ProcessWrapper Always returns ProcessWrapper for consistent return type. Use getEnv() only when unsecure_env_access is true.
+     * @throws InvalidArgumentException If timeout is invalid or options contains invalid values.
      */
-    public function run(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
+    public function run(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, array $options = array())
     {
-        $process = $this->process($command, $extraBinds, $workingDirectory, $env, $timeout);
-        $process->mustRun();
+        // Validate and normalize options using RunOptions class
+        $normalizedOptions = RunOptions::validateAndNormalize($options);
 
-        return $process;
+        // Determine if env access should be enabled (only when explicitly requested)
+        $enableEnvAccess = RunOptions::get($normalizedOptions, RunOptions::UNSECURE_ENV_ACCESS) === true;
+
+        // Always return ProcessWrapper for consistent return type
+        $wrapper = $this->process($command, $extraBinds, $workingDirectory, $env, $timeout, $enableEnvAccess);
+        $wrapper->mustRun();
+
+        return $wrapper;
     }
 
     /**

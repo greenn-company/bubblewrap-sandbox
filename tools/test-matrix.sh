@@ -64,6 +64,9 @@ EOF
       cd \"\$workdir\"
 
       composer config --no-interaction --global allow-plugins.kylekatarnls/update-helper true || true
+      # Compatibility matrix includes legacy Laravel versions that pull Carbon 1.x, which is blocked by Composer's security advisory gate.
+      # Disable blocking inside this ephemeral test container so installs can proceed; keep this away from production usage.
+      composer config --no-interaction --global audit.block-insecure false || true
       rm -f composer.lock
       composer require \"illuminate/support:${laravel_constraint}\" --with-all-dependencies --no-interaction --no-progress \${COMPOSER_FLAGS:-}
       vendor/bin/phpunit \${PHPUNIT_FLAGS:-}
