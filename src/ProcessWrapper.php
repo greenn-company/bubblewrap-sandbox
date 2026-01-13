@@ -59,6 +59,11 @@ class ProcessWrapper
     /**
      * Get the wrapped Process instance.
      *
+     * WARNING: Accessing the underlying Process directly bypasses the security
+     * controls of ProcessWrapper. The caller can call $process->getEnv() even
+     * when env access is disabled on this wrapper. Use with caution and only
+     * when you need direct Process functionality not available through the wrapper.
+     *
      * @return \Symfony\Component\Process\Process
      */
     public function getProcess()
@@ -102,14 +107,31 @@ class ProcessWrapper
      * Magic method to delegate calls to the wrapped Process instance.
      *
      * This allows the wrapper to be used as a drop-in replacement for Process
-     * in most cases.
+     * in most cases. Environment-related methods are blocked for security.
      *
      * @param string $method Method name.
      * @param array  $args   Method arguments.
      * @return mixed
+     * @throws RuntimeException If trying to access env-related methods when access is disabled.
+     * @throws BadMethodCallException If method does not exist on Process.
      */
     public function __call($method, $args)
     {
+        // Block direct access to env-related methods to prevent security bypass
+        // These methods could expose environment variables even when envAccessEnabled is false
+        $blockedEnvMethods = array('getEnv', 'setEnv');
+        if (in_array($method, $blockedEnvMethods, true)) {
+            if ($method === 'getEnv') {
+                // Redirect to our controlled getEnv() method
+                return $this->getEnv();
+            }
+            // Block setEnv to prevent modification of environment variables after creation
+            throw new RuntimeException(
+                'Cannot modify environment variables on ProcessWrapper. ' .
+                'Environment variables must be set when calling run().'
+            );
+        }
+
         if (!method_exists($this->process, $method)) {
             throw new BadMethodCallException(
                 sprintf('Method %s does not exist on Symfony\Component\Process\Process', $method)
@@ -185,5 +207,4 @@ class ProcessWrapper
         );
     }
 }
-
 

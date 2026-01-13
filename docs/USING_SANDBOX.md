@@ -192,10 +192,11 @@ $output = $wrapper->getOutput();
 // $wrapper é ProcessWrapper (compatível com Process)
 ```
 
-## Opções avançadas
-
-O método `run()` aceita um parâmetro adicional `$options` para configurações avançadas. Veja a documentação completa em [docs/PARAMETROS_RUN.md](PARAMETROS_RUN.md) para detalhes sobre todas as opções disponíveis.
-```
+## Dicas para conversão HEIC
 
 - Garanta que `heif-convert` está acessível no host; exponha apenas as pastas necessárias.
 - Mantenha logs e trate `returnCode` como no exemplo original para identificar falhas.
+
+## Opções avançadas
+
+O método `run()` aceita um parâmetro adicional `$options` para configurações avançadas. Veja a documentação completa em [docs/PARAMETROS_RUN.md](PARAMETROS_RUN.md) para detalhes sobre todas as opções disponíveis.
