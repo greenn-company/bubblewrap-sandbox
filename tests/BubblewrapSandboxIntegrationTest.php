@@ -227,6 +227,13 @@ class BubblewrapSandboxIntegrationTest extends TestCase
             $this->markTestSkipped('ping binary not available on this system.');
         }
 
+        // Pre-check: verify host has connectivity to 8.8.8.8 before testing isolation
+        $preCheck = new Process(array($ping, '-c', '1', '-W', '2', '8.8.8.8'));
+        $preCheck->run();
+        if (!$preCheck->isSuccessful()) {
+            $this->markTestSkipped('Host has no connectivity to 8.8.8.8; cannot test network isolation.');
+        }
+
         $readOnly = array('/usr', '/bin', '/lib', '/sbin', '/etc/resolv.conf', '/etc/ssl');
         if (is_dir('/lib64')) {
             $readOnly[] = '/lib64';
