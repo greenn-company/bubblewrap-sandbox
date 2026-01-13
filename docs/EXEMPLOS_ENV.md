@@ -88,6 +88,8 @@ $wrapper = BubblewrapSandbox::run(
 
 ## Exemplo 4: Uso completo com instância direta
 
+> **Aviso**: Este exemplo usa valores fictícios para demonstração. **NUNCA** use `UNSECURE_ENV_ACCESS` em produção com credenciais reais. Se precisar debugar variáveis de ambiente, use apenas em ambiente de desenvolvimento com valores de teste.
+
 ```php
 use SecureRun\BubblewrapSandboxRunner;
 use SecureRun\RunOptions;
@@ -95,9 +97,11 @@ use SecureRun\RunOptions;
 $config = require __DIR__ . '/config/sandbox.php';
 $sandbox = BubblewrapSandboxRunner::fromConfig($config);
 
+// ATENÇÃO: Use apenas valores fictícios para testes!
+// Nunca exponha credenciais reais com UNSECURE_ENV_ACCESS
 $env = [
-    'DATABASE_URL' => 'postgresql://user:pass@localhost/db',
-    'API_KEY' => 'secret-key'
+    'DATABASE_URL' => 'postgresql://test_user:test_pass@localhost/test_db',
+    'CONFIG_PATH' => '/tmp/config.json'
 ];
 
 $wrapper = $sandbox->run(
@@ -106,13 +110,13 @@ $wrapper = $sandbox->run(
     '/tmp',
     $env,
     300,
-    [RunOptions::UNSECURE_ENV_ACCESS => true]
+    [RunOptions::UNSECURE_ENV_ACCESS => true]  // Apenas para debug/desenvolvimento!
 );
 
-// Acessar o env
+// Acessar o env (útil para debugging)
 $envVars = $wrapper->getEnv();
-if (isset($envVars['DATABASE_URL'])) {
-    echo "Database URL was: " . $envVars['DATABASE_URL'];
+if (isset($envVars['CONFIG_PATH'])) {
+    echo "Config path usado: " . $envVars['CONFIG_PATH'];
 }
 
 // Verificar se o comando foi bem-sucedido
@@ -169,8 +173,17 @@ $env = [
     'API_TOKEN' => 'secret-token-123'
 ];
 
+// Validar ANTES de executar
+$requiredVars = ['API_ENDPOINT', 'API_TOKEN'];
+foreach ($requiredVars as $var) {
+    if (!isset($env[$var])) {
+        throw new \RuntimeException("Variável de ambiente obrigatória não encontrada: $var");
+    }
+}
+
+// Usar sh -c para permitir expansão de variáveis de ambiente
 $wrapper = BubblewrapSandbox::run(
-    ['curl', '--header', 'Authorization: Bearer $API_TOKEN', '$API_ENDPOINT/data'],
+    ['sh', '-c', 'curl --header "Authorization: Bearer $API_TOKEN" "$API_ENDPOINT/data"'],
     [],
     null,
     $env,
@@ -178,18 +191,9 @@ $wrapper = BubblewrapSandbox::run(
     [RunOptions::UNSECURE_ENV_ACCESS => true]
 );
 
-// Recuperar e validar o env
+// Recuperar o env usado na execução
 $retrievedEnv = $wrapper->getEnv();
-
-// Verificar se as variáveis necessárias estavam presentes
-$requiredVars = ['API_ENDPOINT', 'API_TOKEN'];
-foreach ($requiredVars as $var) {
-    if (!isset($retrievedEnv[$var])) {
-        throw new \RuntimeException("Variável de ambiente obrigatória não encontrada: $var");
-    }
-}
-
-echo "Todas as variáveis necessárias foram passadas corretamente.\n";
+echo "Comando executado com as variáveis: " . implode(', ', array_keys($retrievedEnv)) . "\n";
 ```
 
 ## Resumo Rápido
@@ -245,7 +249,8 @@ try {
 
 1. **Parâmetro `$options`**: É o 6º e último parâmetro do método `run()`
 2. **Valor deve ser boolean `true`**: Não aceita strings como `'true'` ou números como `1`
-3. **Retorno**: Sempre retorna `ProcessWrapper` (compatível com `Process`); a opção apenas habilita `getEnv()`4. **Segurança**: Por padrão, o env nunca é retornado (comportamento seguro)
+3. **Retorno**: Sempre retorna `ProcessWrapper` (compatível com `Process`); a opção apenas habilita `getEnv()`
+4. **Segurança**: Por padrão, o env nunca é retornado (comportamento seguro)
 5. **Uso da constante**: Prefira `RunOptions::UNSECURE_ENV_ACCESS` para evitar erros de digitação
 
 ## Valores Aceitos
