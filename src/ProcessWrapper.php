@@ -2,6 +2,7 @@
 
 namespace SecureRun;
 
+use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
@@ -128,11 +129,7 @@ class ProcessWrapper
     {
         // Prevent access to internal properties
         if (in_array($name, array('process', 'env', 'envAccessEnabled'), true)) {
-            $trace = debug_backtrace();
-            $caller = isset($trace[1]) ? $trace[1] : array();
-            if (!isset($caller['class']) || $caller['class'] !== __CLASS__) {
-                throw new \RuntimeException('Cannot access protected property: ' . $name);
-            }
+            throw new RuntimeException('Cannot access protected property: ' . $name);
         }
 
         return $this->process->$name;
