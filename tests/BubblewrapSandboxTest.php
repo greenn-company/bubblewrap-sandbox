@@ -57,6 +57,24 @@ class BubblewrapSandboxTest extends TestCase
         );
     }
 
+    /**
+     * Creates a mock sandbox that returns ProcessWrapper with given env access.
+     *
+     * @return BubblewrapSandboxRunner
+     */
+    protected function makeMockSandbox()
+    {
+        return new class(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        }) extends BubblewrapSandboxRunner {
+            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
+            {
+                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
+                return new ProcessWrapper($process, $env, $enableEnvAccess);
+            }
+        };
+    }
+
     public function testBuildCommandIncludesBaseAndBinds()
     {
         $sandbox = $this->makeSandbox();
@@ -430,16 +448,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunReturnsProcessWrapperByDefault()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                // Always return ProcessWrapper with mock process
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         $wrapper = $sandbox->run(array('echo', 'test'), array(), null, null, 5);
 
@@ -458,16 +467,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunReturnsProcessWrapperWithEnvAccessWhenEnabled()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                // Always return ProcessWrapper
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         $env = array('TEST_VAR' => 'test_value', 'HOME' => '/tmp');
         $wrapper = $sandbox->run(
@@ -486,15 +486,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunReturnsProcessWrapperWithEnvAccessWhenEnabledWithStringKey()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         $env = array('TEST_VAR' => 'test_value');
         $wrapper = $sandbox->run(
@@ -513,15 +505,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunReturnsProcessWrapperWithoutEnvAccessWhenDisabled()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         $wrapper = $sandbox->run(
             array('echo', 'test'),
@@ -614,15 +598,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunWithEmptyOptionsReturnsProcessWrapper()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         $wrapper = $sandbox->run(
             array('echo', 'test'),
@@ -670,15 +646,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunProcessWrapperWithNullEnv()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         $wrapper = $sandbox->run(
             array('echo', 'test'),
@@ -698,15 +666,7 @@ class BubblewrapSandboxTest extends TestCase
 
     public function testRunOptionsNormalizeWithDefaults()
     {
-        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
-            // Skip binary validation in tests
-        }) extends BubblewrapSandboxRunner {
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
-            {
-                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
-                return new ProcessWrapper($process, $env, $enableEnvAccess);
-            }
-        };
+        $sandbox = $this->makeMockSandbox();
 
         // Only provide unsecure_env_access, should merge with defaults
         $wrapper = $sandbox->run(

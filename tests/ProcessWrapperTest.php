@@ -94,6 +94,16 @@ class ProcessWrapperTest extends TestCase
         $wrapper->nonExistentMethod();
     }
 
+    public function testSetEnvIsBlocked()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        $this->expectExceptionCompat(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Cannot modify environment variables/');
+        $wrapper->setEnv(array('BLOCKED' => 'value'));
+    }
+
     public function testMethodDelegationToProcess()
     {
         $process = $this->makeProcess();

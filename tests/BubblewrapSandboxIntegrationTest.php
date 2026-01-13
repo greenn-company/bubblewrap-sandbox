@@ -190,7 +190,7 @@ class BubblewrapSandboxIntegrationTest extends TestCase
             $process = $this->runSandboxCommand(
                 $baseArgs,
                 $readOnly,
-                array('/bin/bash', '-c', "echo 'Teste de isolamento' > arquivo.txt && cat arquivo.txt"),
+                array('/bin/bash', '-c', "echo 'Isolation test' > arquivo.txt && cat arquivo.txt"),
                 array(
                     array('from' => $tempDir, 'to' => '/home', 'read_only' => false),
                 )
@@ -200,9 +200,9 @@ class BubblewrapSandboxIntegrationTest extends TestCase
                 $this->fail('Sandbox command failed: ' . trim($process->getErrorOutput()));
             }
 
-            $this->assertSame("Teste de isolamento\n", $process->getOutput());
+            $this->assertSame("Isolation test\n", $process->getOutput());
             $this->assertFileExists($tempDir . '/arquivo.txt');
-            $this->assertSame("Teste de isolamento\n", file_get_contents($tempDir . '/arquivo.txt'));
+            $this->assertSame("Isolation test\n", file_get_contents($tempDir . '/arquivo.txt'));
         } finally {
             if (file_exists($tempDir . '/arquivo.txt')) {
                 unlink($tempDir . '/arquivo.txt');
