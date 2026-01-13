@@ -13,14 +13,6 @@ class ProcessWrapperTest extends TestCase
         return new Process(array(PHP_BINARY, '-r', 'echo "test output";'), null, null, null, 5);
     }
 
-    public function testConstructorStoresProcess()
-    {
-        $process = $this->makeProcess();
-        $wrapper = new ProcessWrapper($process, null, false);
-
-        $this->assertSame($process, $wrapper->getProcess());
-    }
-
     public function testGetEnvThrowsWhenNotEnabled()
     {
         $process = $this->makeProcess();
@@ -86,7 +78,6 @@ class ProcessWrapperTest extends TestCase
         $wrapper = new ProcessWrapper($process, null, false);
 
         // Test that wrapper delegates method calls to Process
-        $this->assertInstanceOf(Process::class, $wrapper->getProcess());
         $this->assertEquals(5, $wrapper->getTimeout());
 
         // Run the process to test getOutput

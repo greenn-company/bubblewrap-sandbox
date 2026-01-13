@@ -21,21 +21,21 @@ class ProcessWrapper
      *
      * @var \Symfony\Component\Process\Process
      */
-    protected $process;
+    private $process;
 
     /**
      * Environment variables passed to the process (if storage is enabled).
      *
      * @var array<string,string>|null
      */
-    protected $env;
+    private $env;
 
     /**
      * Whether environment variable access is enabled for this instance.
      *
      * @var bool
      */
-    protected $envAccessEnabled;
+    private $envAccessEnabled;
 
     /**
      * Constructor.
@@ -54,22 +54,7 @@ class ProcessWrapper
         if ($this->envAccessEnabled) {
             $this->env = $env !== null ? $env : array();
         }
-    }
-
-    /**
-     * Get the wrapped Process instance.
-     *
-     * WARNING: Accessing the underlying Process directly bypasses the security
-     * controls of ProcessWrapper. The caller can call $process->getEnv() even
-     * when env access is disabled on this wrapper. Use with caution and only
-     * when you need direct Process functionality not available through the wrapper.
-     *
-     * @return \Symfony\Component\Process\Process
-     */
-    public function getProcess()
-    {
-        return $this->process;
-    }
+    }    
 
     /**
      * Get environment variables passed to the process.
@@ -117,18 +102,11 @@ class ProcessWrapper
      */
     public function __call($method, $args)
     {
-        // Block direct access to env-related methods to prevent security bypass
-        // These methods could expose environment variables even when envAccessEnabled is false
-        $blockedEnvMethods = array('getEnv', 'setEnv');
-        if (in_array($method, $blockedEnvMethods, true)) {
-            if ($method === 'getEnv') {
-                // Redirect to our controlled getEnv() method
-                return $this->getEnv();
-            }
-            // Block setEnv to prevent modification of environment variables after creation
+        // Prevent direct manipulation of environment variables
+        if (strtolower($method) === 'setenv') {
             throw new RuntimeException(
-                'Cannot modify environment variables on ProcessWrapper. ' .
-                'Environment variables must be set when calling run().'
+                'Cannot modify environment variables through ProcessWrapper. ' .
+                'Environment must be set at construction time.'
             );
         }
 
