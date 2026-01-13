@@ -11,7 +11,7 @@ class RunOptionsTest extends TestCase
     {
         $keys = RunOptions::getValidKeys();
 
-        $this->assertIsArray($keys);
+        $this->assertTrue(is_array($keys));
         $this->assertNotEmpty($keys);
         $this->assertContains(RunOptions::UNSECURE_ENV_ACCESS, $keys);
     }
@@ -20,7 +20,7 @@ class RunOptionsTest extends TestCase
     {
         $defaults = RunOptions::getDefaults();
 
-        $this->assertIsArray($defaults);
+        $this->assertTrue(is_array($defaults));
         $this->assertArrayHasKey(RunOptions::UNSECURE_ENV_ACCESS, $defaults);
         $this->assertFalse($defaults[RunOptions::UNSECURE_ENV_ACCESS]);
     }
@@ -41,7 +41,7 @@ class RunOptionsTest extends TestCase
     {
         $result = RunOptions::validateAndNormalize(array());
 
-        $this->assertIsArray($result);
+        $this->assertTrue(is_array($result));
         $this->assertEquals(RunOptions::getDefaults(), $result);
     }
 
@@ -66,7 +66,7 @@ class RunOptionsTest extends TestCase
 
         // Should have all default keys
         $defaults = RunOptions::getDefaults();
-        foreach ($defaults as $key => $value) {
+        foreach (array_keys($defaults) as $key) {
             $this->assertArrayHasKey($key, $result);
         }
     }

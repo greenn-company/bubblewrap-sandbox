@@ -692,7 +692,7 @@ class BubblewrapSandboxTest extends TestCase
         $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
         $this->assertTrue($wrapper->isEnvAccessEnabled());
         $env = $wrapper->getEnv();
-        $this->assertIsArray($env);
+        $this->assertTrue(is_array($env));
         $this->assertEmpty($env);
     }
 

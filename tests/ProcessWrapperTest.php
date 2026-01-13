@@ -48,7 +48,7 @@ class ProcessWrapperTest extends TestCase
 
         $result = $wrapper->getEnv();
 
-        $this->assertIsArray($result);
+        $this->assertTrue(is_array($result));
         $this->assertEmpty($result);
     }
 
@@ -103,12 +103,12 @@ class ProcessWrapperTest extends TestCase
         $wrapper->nonExistentMethod();
     }
 
-    public function testMagicGetDelegatesToProcess()
+    public function testMethodDelegationToProcess()
     {
         $process = $this->makeProcess();
         $wrapper = new ProcessWrapper($process, null, false);
 
-        // Access public property via magic get
+        // Test that wrapper delegates method calls to Process
         $timeout = $wrapper->getTimeout();
         $this->assertEquals(5, $timeout);
     }
@@ -163,5 +163,3 @@ class ProcessWrapperTest extends TestCase
         $this->assertNotEquals($wrapper1->getEnv(), $wrapper2->getEnv());
     }
 }
-
-
