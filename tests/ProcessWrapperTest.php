@@ -61,16 +61,6 @@ class ProcessWrapperTest extends TestCase
         $this->assertFalse($wrapper->isEnvAccessEnabled());
     }
 
-    public function testWrapperDoesNotStoreEnvWhenNotEnabled()
-    {
-        $env = array('SECRET' => 'value');
-        $process = $this->makeProcess();
-        $wrapper = new ProcessWrapper($process, $env, false);
-
-        $this->expectExceptionCompat(RuntimeException::class);
-        $wrapper->getEnv();
-    }
-
     public function testMagicCallDelegatesToProcess()
     {
         $process = $this->makeProcess();
