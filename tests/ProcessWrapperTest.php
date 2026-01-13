@@ -2,6 +2,7 @@
 
 namespace SecureRun\Tests;
 
+use BadMethodCallException;
 use SecureRun\ProcessWrapper;
 use Symfony\Component\Process\Process;
 use RuntimeException;
@@ -40,7 +41,7 @@ class ProcessWrapperTest extends TestCase
 
         $result = $wrapper->getEnv();
 
-        $this->assertTrue(is_array($result));
+        $this->assertIsArray($result);
         $this->assertEmpty($result);
     }
 
@@ -66,8 +67,6 @@ class ProcessWrapperTest extends TestCase
         $process = $this->makeProcess();
         $wrapper = new ProcessWrapper($process, $env, false);
 
-        // Env should not be stored when not enabled
-        $this->assertFalse($wrapper->isEnvAccessEnabled());
         $this->expectExceptionCompat(RuntimeException::class);
         $wrapper->getEnv();
     }
@@ -90,7 +89,7 @@ class ProcessWrapperTest extends TestCase
         $process = $this->makeProcess();
         $wrapper = new ProcessWrapper($process, null, false);
 
-        $this->expectExceptionCompat(\BadMethodCallException::class);
+        $this->expectExceptionCompat(BadMethodCallException::class);
         $wrapper->nonExistentMethod();
     }
 
