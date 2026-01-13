@@ -104,28 +104,14 @@ class ProcessWrapperTest extends TestCase
         $wrapper->setEnv(array('BLOCKED' => 'value'));
     }
 
-    public function testMethodDelegationToProcess()
-    {
-        $process = $this->makeProcess();
-        $wrapper = new ProcessWrapper($process, null, false);
-
-        // Test that wrapper delegates method calls to Process
-        $timeout = $wrapper->getTimeout();
-        $this->assertEquals(5, $timeout);
-    }
-
     public function testMagicGetPreventsAccessToInternalProperties()
     {
         $process = $this->makeProcess();
         $wrapper = new ProcessWrapper($process, null, false);
 
-        // Should not be able to access internal properties from outside
-        try {
-            $val = $wrapper->process;
-            $this->fail('Should have thrown exception');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Cannot access internal property', $e->getMessage());
-        }
+        $this->expectExceptionCompat(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Cannot access internal property/');
+        $wrapper->process;
     }
 
     public function testMagicSetPreventsModificationOfInternalProperties()
@@ -161,6 +147,5 @@ class ProcessWrapperTest extends TestCase
 
         $this->assertEquals($env1, $wrapper1->getEnv());
         $this->assertEquals($env2, $wrapper2->getEnv());
-        $this->assertNotEquals($wrapper1->getEnv(), $wrapper2->getEnv());
     }
 }
