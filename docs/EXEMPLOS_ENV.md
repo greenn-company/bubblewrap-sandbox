@@ -4,7 +4,20 @@ Este documento mostra exemplos práticos de como usar o parâmetro `unsecure_env
 
 ## Aviso de Segurança
 
-O método `run()` **sempre retorna `ProcessWrapper`** (compatível com `Process`) para manter consistência. Por padrão, o acesso às variáveis de ambiente via `getEnv()` está desabilitado e lança exceção por questões de segurança. Use `unsecure_env_access => true` apenas quando realmente necessário e esteja ciente dos riscos de expor essas informações.
+O método `run()` **sempre retorna `ProcessWrapper`** (compatível com `Process`) para manter consistência. Por padrão, o acesso às variáveis de ambiente via `getEnv()` está desabilitado e lança exceção por questões de segurança.
+
+**`unsecure_env_access => true` expõe variáveis de ambiente que podem conter:**
+- Credenciais de banco de dados, APIs e serviços externos
+- Tokens de autenticação e secrets
+- Paths de configuração que revelam estrutura do sistema
+
+**Riscos ao habilitar:**
+- Vazamento em logs se o ProcessWrapper for registrado
+- Exposição em stack traces de exceções não tratadas
+- Exfiltração se o objeto for serializado ou passado para código não confiável
+- Violação de princípios de menor privilégio
+
+**Use apenas para debugging em ambiente de desenvolvimento com valores fictícios. Nunca habilite em produção.**
 
 ## Exemplo 1: Usando a constante `RunOptions` (Recomendado)
 
@@ -36,7 +49,7 @@ print_r($retrievedEnv);
 // (
 //     [PYTHONPATH] => /tmp/python-libs
 //     [HOME] => /tmp
-//     [LANG] => 'pt_BR.UTF-8'
+//     [LANG] => pt_BR.UTF-8
 // )
 
 // O wrapper também funciona como Process normal
@@ -88,7 +101,7 @@ $wrapper = BubblewrapSandbox::run(
 
 ## Exemplo 4: Uso completo com instância direta
 
-> **Aviso**: Este exemplo usa valores fictícios para demonstração. **NUNCA** use `UNSECURE_ENV_ACCESS` em produção com credenciais reais. Se precisar debugar variáveis de ambiente, use apenas em ambiente de desenvolvimento com valores de teste.
+> **Aviso**: Demonstração apenas. Nunca use `UNSECURE_ENV_ACCESS` em produção.
 
 ```php
 use SecureRun\BubblewrapSandboxRunner;
@@ -97,11 +110,10 @@ use SecureRun\RunOptions;
 $config = require __DIR__ . '/config/sandbox.php';
 $sandbox = BubblewrapSandboxRunner::fromConfig($config);
 
-// ATENÇÃO: Use apenas valores fictícios para testes!
-// Nunca exponha credenciais reais com UNSECURE_ENV_ACCESS
 $env = [
-    'DATABASE_URL' => 'postgresql://test_user:test_pass@localhost/test_db',
-    'CONFIG_PATH' => '/tmp/config.json'
+    'INPUT_PATH' => '/tmp/input.txt',
+    'OUTPUT_PATH' => '/tmp/output.txt',
+    'WORKER_ID' => 'worker-123'
 ];
 
 $wrapper = $sandbox->run(
@@ -110,13 +122,13 @@ $wrapper = $sandbox->run(
     '/tmp',
     $env,
     300,
-    [RunOptions::UNSECURE_ENV_ACCESS => true]  // Apenas para debug/desenvolvimento!
+    [RunOptions::UNSECURE_ENV_ACCESS => true]
 );
 
-// Acessar o env (útil para debugging)
+// Acessar o env
 $envVars = $wrapper->getEnv();
-if (isset($envVars['CONFIG_PATH'])) {
-    echo "Config path usado: " . $envVars['CONFIG_PATH'];
+if (isset($envVars['WORKER_ID'])) {
+    echo "Worker ID: " . $envVars['WORKER_ID'];
 }
 
 // Verificar se o comando foi bem-sucedido
@@ -164,6 +176,11 @@ foreach ($usedEnv as $key => $value) {
 
 ## Exemplo 6: Validando env antes de usar
 
+> **PERIGO: Command Injection** - Este exemplo usa `sh -c` que é vulnerável a command injection.
+> Apenas use se os valores de `$env` vierem de fonte confiável e sejam validados.
+> Nunca passe input de usuário diretamente para comandos shell.
+> Tokens em variáveis de ambiente podem aparecer em `ps aux`.
+
 ```php
 use SecureRun\BubblewrapSandbox;
 use SecureRun\RunOptions;
@@ -181,7 +198,13 @@ foreach ($requiredVars as $var) {
     }
 }
 
+// IMPORTANTE: Validar que API_ENDPOINT é uma URL segura
+if (!filter_var($env['API_ENDPOINT'], FILTER_VALIDATE_URL)) {
+    throw new \RuntimeException("API_ENDPOINT não é uma URL válida");
+}
+
 // Usar sh -c para permitir expansão de variáveis de ambiente
+// AVISO: Vulnerável a command injection se valores não forem confiáveis
 $wrapper = BubblewrapSandbox::run(
     ['sh', '-c', 'curl --header "Authorization: Bearer $API_TOKEN" "$API_ENDPOINT/data"'],
     [],
