@@ -141,7 +141,7 @@ class BubblewrapSandboxRunner
         $normalizedOptions = RunOptions::validateAndNormalize($options);
 
         // Determine if env access should be enabled (only when explicitly requested)
-        $enableEnvAccess = RunOptions::get($normalizedOptions, RunOptions::UNSECURE_ENV_ACCESS) === true;
+        $enableEnvAccess = RunOptions::get($normalizedOptions, RunOptions::UNSECURE_ENV_ACCESS);
 
         // Always return ProcessWrapper for consistent return type
         $wrapper = $this->process($command, $extraBinds, $workingDirectory, $env, $timeout, $enableEnvAccess);

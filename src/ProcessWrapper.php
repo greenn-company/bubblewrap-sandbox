@@ -2,6 +2,7 @@
 
 namespace SecureRun;
 
+use BadMethodCallException;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
@@ -47,12 +48,11 @@ class ProcessWrapper
     {
         $this->process = $process;
         $this->envAccessEnabled = (bool) $envAccessEnabled;
+        $this->env = null;
 
         // Only store env if access is explicitly enabled
         if ($this->envAccessEnabled) {
             $this->env = $env !== null ? $env : array();
-        } else {
-            $this->env = null;
         }
     }
 
@@ -73,13 +73,13 @@ class ProcessWrapper
      * 1. Environment access was enabled when creating this wrapper
      * 2. The method is called explicitly
      *
-     * @return array<string,string> Environment variables array, or empty array if access is disabled.
+     * @return array<string,string> Environment variables array.
      * @throws \RuntimeException If environment access is not enabled for this instance.
      */
     public function getEnv()
     {
         if (!$this->envAccessEnabled) {
-            throw new \RuntimeException(
+            throw new RuntimeException(
                 'Environment variable access is not enabled for this ProcessWrapper instance. ' .
                 'To enable it, pass unsecure_env_access => true in the options parameter when calling run().'
             );
@@ -111,7 +111,7 @@ class ProcessWrapper
     public function __call($method, $args)
     {
         if (!method_exists($this->process, $method)) {
-            throw new \BadMethodCallException(
+            throw new BadMethodCallException(
                 sprintf('Method %s does not exist on Symfony\Component\Process\Process', $method)
             );
         }
@@ -124,12 +124,19 @@ class ProcessWrapper
      *
      * @param string $name Property name.
      * @return mixed
+     * @throws RuntimeException If property does not exist on Process.
      */
     public function __get($name)
     {
         // Prevent access to internal properties
         if (in_array($name, array('process', 'env', 'envAccessEnabled'), true)) {
             throw new RuntimeException('Cannot access protected property: ' . $name);
+        }
+
+        if (!property_exists($this->process, $name)) {
+            throw new RuntimeException(
+                sprintf('Property %s does not exist on Symfony\Component\Process\Process', $name)
+            );
         }
 
         return $this->process->$name;
@@ -141,12 +148,19 @@ class ProcessWrapper
      * @param string $name  Property name.
      * @param mixed  $value Property value.
      * @return void
+     * @throws RuntimeException If property does not exist on Process (prevents PHP 8.2+ dynamic property deprecation).
      */
     public function __set($name, $value)
     {
         // Prevent modification of internal properties
         if (in_array($name, array('process', 'env', 'envAccessEnabled'), true)) {
-            throw new \RuntimeException('Cannot modify protected property: ' . $name);
+            throw new RuntimeException('Cannot modify protected property: ' . $name);
+        }
+
+        if (!property_exists($this->process, $name)) {
+            throw new RuntimeException(
+                sprintf('Property %s does not exist on Symfony\Component\Process\Process', $name)
+            );
         }
 
         $this->process->$name = $value;
