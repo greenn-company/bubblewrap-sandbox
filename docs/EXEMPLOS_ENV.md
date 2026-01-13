@@ -72,18 +72,18 @@ use SecureRun\BubblewrapSandbox;
 $env = ['SECRET' => 'value'];
 
 // Sem passar a opção unsecure_env_access
-$process = BubblewrapSandbox::run(
+$wrapper = BubblewrapSandbox::run(
     ['echo', 'test'],
     [],
     null,
     $env,
     60
-    // Sem o parâmetro $options - retorna Process normal
+    // Sem o parâmetro $options - comportamento padrão seguro
 );
 
-// $process é Process, não ProcessWrapper
-// Não tem método getEnv() - isso está correto por segurança!
-// $env não é exposto
+// $wrapper é ProcessWrapper, mas getEnv() está bloqueado por segurança
+// Tentar chamar $wrapper->getEnv() lançará RuntimeException
+// $env não é exposto - comportamento seguro por padrão!
 ```
 
 ## Exemplo 4: Uso completo com instância direta
@@ -245,8 +245,7 @@ try {
 
 1. **Parâmetro `$options`**: É o 6º e último parâmetro do método `run()`
 2. **Valor deve ser boolean `true`**: Não aceita strings como `'true'` ou números como `1`
-3. **Retorno**: Quando habilitado, retorna `ProcessWrapper` ao invés de `Process`
-4. **Segurança**: Por padrão, o env nunca é retornado (comportamento seguro)
+3. **Retorno**: Sempre retorna `ProcessWrapper` (compatível com `Process`); a opção apenas habilita `getEnv()`4. **Segurança**: Por padrão, o env nunca é retornado (comportamento seguro)
 5. **Uso da constante**: Prefira `RunOptions::UNSECURE_ENV_ACCESS` para evitar erros de digitação
 
 ## Valores Aceitos
