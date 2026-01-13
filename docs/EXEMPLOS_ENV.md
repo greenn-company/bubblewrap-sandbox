@@ -19,7 +19,9 @@ O método `run()` **sempre retorna `ProcessWrapper`** (compatível com `Process`
 
 **Use apenas para debugging em ambiente de desenvolvimento com valores fictícios. Nunca habilite em produção.**
 
-## Exemplo 1: Usando a constante `RunOptions` (Recomendado)
+## Exemplo 1: Uso básico com acesso ao env
+
+> **Aviso**: Demonstração apenas. Nunca use `UNSECURE_ENV_ACCESS` em produção.
 
 ```php
 use SecureRun\BubblewrapSandbox;
@@ -57,27 +59,7 @@ echo $wrapper->getOutput();
 echo $wrapper->getErrorOutput();
 ```
 
-## Exemplo 2: Usando string diretamente
-
-```php
-use SecureRun\BubblewrapSandbox;
-
-$env = ['MY_VAR' => 'my_value'];
-
-$wrapper = BubblewrapSandbox::run(
-    ['echo', 'test'],
-    [],
-    null,
-    $env,
-    60,
-    ['unsecure_env_access' => true]  // ⭐ usando string diretamente
-);
-
-$retrievedEnv = $wrapper->getEnv();
-echo $retrievedEnv['MY_VAR']; // "my_value"
-```
-
-## Exemplo 3: Sem a opção (Padrão - env NÃO é retornado)
+## Exemplo 2: Comportamento padrão seguro (sem acesso ao env)
 
 ```php
 use SecureRun\BubblewrapSandbox;
@@ -95,128 +77,13 @@ $wrapper = BubblewrapSandbox::run(
 );
 
 // $wrapper é ProcessWrapper, mas getEnv() está bloqueado por segurança
-// Tentar chamar $wrapper->getEnv() lançará RuntimeException
-// $env não é exposto - comportamento seguro por padrão!
-```
-
-## Exemplo 4: Uso completo com instância direta
-
-> **Aviso**: Demonstração apenas. Nunca use `UNSECURE_ENV_ACCESS` em produção.
-
-```php
-use SecureRun\BubblewrapSandboxRunner;
-use SecureRun\RunOptions;
-
-$config = require __DIR__ . '/config/sandbox.php';
-$sandbox = BubblewrapSandboxRunner::fromConfig($config);
-
-$env = [
-    'INPUT_PATH' => '/tmp/input.txt',
-    'OUTPUT_PATH' => '/tmp/output.txt',
-    'WORKER_ID' => 'worker-123'
-];
-
-$wrapper = $sandbox->run(
-    ['my-script.sh'],
-    [],
-    '/tmp',
-    $env,
-    300,
-    [RunOptions::UNSECURE_ENV_ACCESS => true]
-);
-
-// Acessar o env
-$envVars = $wrapper->getEnv();
-if (isset($envVars['WORKER_ID'])) {
-    echo "Worker ID: " . $envVars['WORKER_ID'];
+// $wrapper->getOutput() funciona normalmente
+try {
+    $wrapper->getEnv(); // lança RuntimeException
+} catch (\RuntimeException $e) {
+    // Comportamento esperado e seguro!
+    // Mensagem: "Environment variable access is not enabled for this ProcessWrapper instance. To enable it, pass unsecure_env_access => true in the options parameter when calling run()."
 }
-
-// Verificar se o comando foi bem-sucedido
-if ($wrapper->isSuccessful()) {
-    echo "Script executado com sucesso!";
-}
-```
-
-## Exemplo 5: Processando output e recuperando env
-
-```php
-use SecureRun\BubblewrapSandbox;
-use SecureRun\RunOptions;
-
-$env = [
-    'INPUT_FILE' => '/tmp/input.txt',
-    'OUTPUT_DIR' => '/tmp/output',
-    'LOG_LEVEL' => 'debug'
-];
-
-$wrapper = BubblewrapSandbox::run(
-    ['python3', 'process-file.py'],
-    [
-        ['from' => '/tmp/input.txt', 'to' => '/tmp/input.txt', 'read_only' => true],
-        ['from' => '/tmp/output', 'to' => '/tmp/output', 'read_only' => false]
-    ],
-    '/tmp',
-    $env,
-    180,
-    [RunOptions::UNSECURE_ENV_ACCESS => true]
-);
-
-// Processar o output
-$output = $wrapper->getOutput();
-$errors = $wrapper->getErrorOutput();
-$exitCode = $wrapper->getExitCode();
-
-// Recuperar as variáveis de ambiente usadas
-$usedEnv = $wrapper->getEnv();
-echo "Processamento usado as seguintes variáveis:\n";
-foreach ($usedEnv as $key => $value) {
-    echo "  $key = $value\n";
-}
-```
-
-## Exemplo 6: Validando env antes de usar
-
-> **PERIGO: Command Injection** - Este exemplo usa `sh -c` que é vulnerável a command injection.
-> Apenas use se os valores de `$env` vierem de fonte confiável e sejam validados.
-> Nunca passe input de usuário diretamente para comandos shell.
-> Tokens em variáveis de ambiente podem aparecer em `ps aux`.
-
-```php
-use SecureRun\BubblewrapSandbox;
-use SecureRun\RunOptions;
-
-$env = [
-    'API_ENDPOINT' => 'https://api.example.com',
-    'API_TOKEN' => 'secret-token-123'
-];
-
-// Validar ANTES de executar
-$requiredVars = ['API_ENDPOINT', 'API_TOKEN'];
-foreach ($requiredVars as $var) {
-    if (!isset($env[$var])) {
-        throw new \RuntimeException("Variável de ambiente obrigatória não encontrada: $var");
-    }
-}
-
-// IMPORTANTE: Validar que API_ENDPOINT é uma URL segura
-if (!filter_var($env['API_ENDPOINT'], FILTER_VALIDATE_URL)) {
-    throw new \RuntimeException("API_ENDPOINT não é uma URL válida");
-}
-
-// Usar sh -c para permitir expansão de variáveis de ambiente
-// AVISO: Vulnerável a command injection se valores não forem confiáveis
-$wrapper = BubblewrapSandbox::run(
-    ['sh', '-c', 'curl --header "Authorization: Bearer $API_TOKEN" "$API_ENDPOINT/data"'],
-    [],
-    null,
-    $env,
-    60,
-    [RunOptions::UNSECURE_ENV_ACCESS => true]
-);
-
-// Recuperar o env usado na execução
-$retrievedEnv = $wrapper->getEnv();
-echo "Comando executado com as variáveis: " . implode(', ', array_keys($retrievedEnv)) . "\n";
 ```
 
 ## Resumo Rápido
@@ -242,7 +109,7 @@ $retrievedEnv = $wrapper->getEnv(); // funciona!
 print_r($retrievedEnv);
 ```
 
-### SEM acesso ao env (Padrão - Seguro)
+### ❌ SEM acesso ao env (Padrão - Seguro)
 
 ```php
 use SecureRun\BubblewrapSandbox;
@@ -265,6 +132,7 @@ try {
     $wrapper->getEnv(); // lança RuntimeException
 } catch (\RuntimeException $e) {
     // Comportamento esperado e seguro!
+    // Mensagem: "Environment variable access is not enabled for this ProcessWrapper instance. To enable it, pass unsecure_env_access => true in the options parameter when calling run()."
 }
 ```
 
@@ -299,4 +167,3 @@ try {
 
 - [Parâmetros do método run()](PARAMETROS_RUN.md) - Documentação completa dos parâmetros
 - [Guia de uso](USING_SANDBOX.md) - Guia geral de uso do sandbox
-

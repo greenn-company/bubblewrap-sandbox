@@ -12,7 +12,7 @@ use Symfony\Component\Process\Process;
  * This wrapper provides access to environment variables only when explicitly enabled,
  * preventing accidental or forced exposure of sensitive data.
  *
- * Compatible with PHP 5.6+ (no scalar type hints).
+ * Compatible with PHP 7.0+ (no scalar type hints).
  */
 class ProcessWrapper
 {

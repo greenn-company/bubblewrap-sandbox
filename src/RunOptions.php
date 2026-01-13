@@ -8,7 +8,7 @@ namespace SecureRun;
  * This class centralizes all valid option keys and their default values,
  * making it easier to extend and maintain the options system.
  *
- * Compatible with PHP 5.6+ (no scalar type hints).
+ * Compatible with PHP 7.0+ (no scalar type hints).
  */
 class RunOptions
 {

@@ -9,7 +9,7 @@ use Symfony\Component\Process\Process;
 /**
  * Core bubblewrap runner used by the facade/service provider.
  *
- * Compatible with PHP 5.6+ and Laravel 5.x through 12.x (no scalar type hints).
+ * Compatible with PHP 7.0+ and Laravel 5.x through 12.x (no scalar type hints).
  */
 class BubblewrapSandboxRunner
 {

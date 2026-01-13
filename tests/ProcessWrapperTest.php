@@ -81,7 +81,7 @@ class ProcessWrapperTest extends TestCase
         $this->assertEquals(5, $wrapper->getTimeout());
 
         // Run the process to test getOutput
-        $process->run();
+        $wrapper->run();
         $this->assertEquals('test output', trim($wrapper->getOutput()));
     }
 
