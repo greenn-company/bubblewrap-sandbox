@@ -54,7 +54,7 @@ class ProcessWrapper
         if ($this->envAccessEnabled) {
             $this->env = $env !== null ? $env : array();
         }
-    }    
+    }
 
     /**
      * Get environment variables passed to the process.
@@ -133,7 +133,7 @@ class ProcessWrapper
     {
         // Prevent access to internal properties
         if (in_array($name, array('process', 'env', 'envAccessEnabled'), true)) {
-            throw new RuntimeException('Cannot access protected property: ' . $name);
+            throw new RuntimeException('Cannot access internal property: ' . $name);
         }
 
         // Symfony Process has mostly private properties, so direct access won't work.
@@ -169,7 +169,7 @@ class ProcessWrapper
     {
         // Prevent modification of internal properties
         if (in_array($name, array('process', 'env', 'envAccessEnabled'), true)) {
-            throw new RuntimeException('Cannot modify protected property: ' . $name);
+            throw new RuntimeException('Cannot modify internal property: ' . $name);
         }
 
         // Symfony Process has mostly private properties, so direct assignment won't work.

@@ -114,7 +114,7 @@ class ProcessWrapperTest extends TestCase
             $val = $wrapper->process;
             $this->fail('Should have thrown exception');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Cannot access protected property', $e->getMessage());
+            $this->assertStringContainsString('Cannot access internal property', $e->getMessage());
         }
     }
 
