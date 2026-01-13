@@ -85,7 +85,7 @@ class ProcessWrapper
             );
         }
 
-        return $this->env !== null ? $this->env : array();
+        return $this->env;
     }
 
     /**
@@ -122,9 +122,12 @@ class ProcessWrapper
     /**
      * Magic method to delegate property access to the wrapped Process instance.
      *
+     * Symfony Process has mostly private properties, so we attempt to use
+     * getter methods (e.g., $wrapper->timeout calls $process->getTimeout()).
+     *
      * @param string $name Property name.
      * @return mixed
-     * @throws RuntimeException If property does not exist on Process.
+     * @throws RuntimeException If property is not accessible on Process.
      */
     public function __get($name)
     {
@@ -133,22 +136,34 @@ class ProcessWrapper
             throw new RuntimeException('Cannot access protected property: ' . $name);
         }
 
-        if (!property_exists($this->process, $name)) {
-            throw new RuntimeException(
-                sprintf('Property %s does not exist on Symfony\Component\Process\Process', $name)
-            );
+        // Symfony Process has mostly private properties, so direct access won't work.
+        // Use getter methods if available, otherwise throw.
+        $getter = 'get' . ucfirst($name);
+        if (method_exists($this->process, $getter)) {
+            return $this->process->$getter();
         }
 
-        return $this->process->$name;
+        // Try 'is' prefix for boolean properties (e.g., isSuccessful, isTty)
+        $isGetter = 'is' . ucfirst($name);
+        if (method_exists($this->process, $isGetter)) {
+            return $this->process->$isGetter();
+        }
+
+        throw new RuntimeException(
+            sprintf('Property %s is not accessible on Symfony\Component\Process\Process', $name)
+        );
     }
 
     /**
      * Magic method to delegate property setting to the wrapped Process instance.
      *
+     * Symfony Process has mostly private properties, so we attempt to use
+     * setter methods (e.g., $wrapper->timeout = 60 calls $process->setTimeout(60)).
+     *
      * @param string $name  Property name.
      * @param mixed  $value Property value.
      * @return void
-     * @throws RuntimeException If property does not exist on Process (prevents PHP 8.2+ dynamic property deprecation).
+     * @throws RuntimeException If property is not settable on Process.
      */
     public function __set($name, $value)
     {
@@ -157,13 +172,17 @@ class ProcessWrapper
             throw new RuntimeException('Cannot modify protected property: ' . $name);
         }
 
-        if (!property_exists($this->process, $name)) {
-            throw new RuntimeException(
-                sprintf('Property %s does not exist on Symfony\Component\Process\Process', $name)
-            );
+        // Symfony Process has mostly private properties, so direct assignment won't work.
+        // Use setter methods if available, otherwise throw.
+        $setter = 'set' . ucfirst($name);
+        if (method_exists($this->process, $setter)) {
+            $this->process->$setter($value);
+            return;
         }
 
-        $this->process->$name = $value;
+        throw new RuntimeException(
+            sprintf('Property %s is not settable on Symfony\Component\Process\Process', $name)
+        );
     }
 }
 
