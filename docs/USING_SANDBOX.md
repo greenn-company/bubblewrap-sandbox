@@ -9,7 +9,7 @@ Este pacote coloca comandos externos em uma “caixa de areia” (sandbox) usand
   - Debian/Ubuntu: `apt-get install bubblewrap`
   - Alpine: `apk add bubblewrap`
   - Fedora/CentOS/RHEL: `yum install bubblewrap` ou `dnf install bubblewrap`
-- Laravel 5–12. O código mira PHP 5.6+, mas a suíte de testes usa classes anônimas e roda a partir do PHP 7.x; use 7.x+ em produção.
+- Laravel 5–12 em PHP 7.0+ (requisito do Composer). O código evita sintaxe moderna para funcionar em apps antigos, mas os testes e o suporte começam no PHP 7.x; use no mínimo PHP 7 em produção.
 
 ## Instalação no projeto Laravel
 
@@ -42,17 +42,20 @@ Para ambientes não padrão, ajuste apenas `binary`. Para expor mais pastas, adi
 ```php
 use SecureRun\BubblewrapSandboxRunner;
 
-$sandbox = BubblewrapSandboxRunner::fromConfig(config('sandbox'));
+$config = require __DIR__ . '/../config/sandbox.php'; // ou um array próprio de config
+$sandbox = BubblewrapSandboxRunner::fromConfig($config);
 
-$process = $sandbox->run(
+// run() sempre retorna ProcessWrapper (compatível com Process)
+$wrapper = $sandbox->run(
     ['echo', 'hello'],   // comando e argumentos em array
     [],                  // binds extras (opcional)
     null,                // diretório de trabalho (opcional)
     null,                // variáveis de ambiente (opcional)
-    30                   // timeout em segundos (opcional)
+    30,                  // timeout em segundos (opcional)
+    []                   // opções (opcional)
 );
 
-echo $process->getOutput();
+echo $wrapper->getOutput(); // funciona normalmente
 ```
 
 ### Com Laravel (facade `BubblewrapSandbox`)
@@ -60,9 +63,34 @@ echo $process->getOutput();
 ```php
 use SecureRun\BubblewrapSandbox; // alias registrado como BubblewrapSandbox
 
-$process = BubblewrapSandbox::run(['ls', '-la']);
-$saida = $process->getOutput();
+// run() sempre retorna ProcessWrapper (compatível com Process)
+$wrapper = BubblewrapSandbox::run(['ls', '-la']);
+$saida = $wrapper->getOutput();
 ```
+
+### Acessando variáveis de ambiente (opcional)
+
+O método `run()` sempre retorna `ProcessWrapper` (compatível com `Process`). Por padrão, o acesso às variáveis de ambiente via `getEnv()` está desabilitado e lança exceção por questões de segurança. Se você precisar acessá-las explicitamente, use a opção `unsecure_env_access`:
+
+```php
+use SecureRun\RunOptions;
+
+$env = ['PYTHONPATH' => '/tmp', 'HOME' => '/tmp'];
+$wrapper = BubblewrapSandbox::run(
+    ['python3', 'script.py'],
+    [],
+    null,
+    $env,
+    120,
+    [RunOptions::UNSECURE_ENV_ACCESS => true]
+);
+
+// $wrapper é um ProcessWrapper (compatível com Process)
+$retrievedEnv = $wrapper->getEnv(); // retorna ['PYTHONPATH' => '/tmp', 'HOME' => '/tmp']
+echo $wrapper->getOutput(); // funciona como Process normal
+```
+
+**⚠️ Atenção:** Use `unsecure_env_access => true` apenas quando realmente necessário. Por padrão, o método nunca retorna as variáveis de ambiente por questões de segurança. Veja [docs/PARAMETROS_RUN.md](PARAMETROS_RUN.md) para mais detalhes sobre o parâmetro `$options`.
 
 ## Expondo arquivos/pastas para o comando
 
@@ -74,13 +102,14 @@ $binds = [
     ['from' => '/var/www/storage/output', 'to' => '/var/www/storage/output', 'read_only' => false],
 ];
 
-$process = BubblewrapSandbox::run(
+$wrapper = BubblewrapSandbox::run(
     ['heif-convert', '/var/www/storage/input/photo.heic', '/var/www/storage/output/photo.png'],
     $binds,
     '/var/www/storage/input', // opcional: diretório de trabalho
-    null,
-    60
+    null,                      // opcional: variáveis de ambiente
+    60                        // opcional: timeout
 );
+// $wrapper é ProcessWrapper (funciona como Process)
 ```
 
 - `from`: caminho no host.
@@ -106,3 +135,68 @@ try {
 - Prefira passar argumentos em array (sem shell) para evitar injeção.
 - Defina timeouts razoáveis para evitar travar a fila/worker.
 - Mantenha logs do comando e do stderr para diagnóstico.
+
+## Exemplos práticos
+
+### Compactar/normalizar PDF com Ghostscript
+
+O comando original `shell_exec('gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dNOPAUSE -dQUIET -dBATCH -dPreserveAnnots=true -sOutputFile='.$finalFilePath.' '.$localFile.'');` pode ser executado dentro do sandbox assim:
+
+```php
+$binds = [
+    ['from' => dirname($localFile),    'to' => dirname($localFile),    'read_only' => true],  // ler PDF de entrada
+    ['from' => dirname($finalFilePath),'to' => dirname($finalFilePath),'read_only' => false], // gravar PDF final
+];
+
+$args = [
+    'gs',
+    '-sDEVICE=pdfwrite',
+    '-dCompatibilityLevel=1.4',
+    '-dNOPAUSE',
+    '-dQUIET',
+    '-dBATCH',
+    '-dPreserveAnnots=true',
+    '-sOutputFile=' . $finalFilePath,
+    $localFile,
+];
+
+$wrapper = BubblewrapSandbox::run($args, $binds, null, null, 120);
+// ou com opções:
+// $wrapper = BubblewrapSandbox::run($args, $binds, null, null, 120, []);
+// $wrapper é ProcessWrapper (funciona como Process)
+```
+
+- Use os binds para expor apenas as pastas que contêm o PDF de entrada e a pasta de saída.
+- O array de argumentos evita interpolação em shell; ajuste o timeout conforme o tamanho dos arquivos.
+
+### Converter HEIC para PNG com `heif-convert`
+
+O método abaixo mostra como adaptar a conversão para rodar no sandbox, expondo apenas os diretórios de entrada e saída:
+
+```php
+$binds = [
+    ['from' => dirname($sourcePath), 'to' => dirname($sourcePath), 'read_only' => true],
+    ['from' => dirname($outputPath), 'to' => dirname($outputPath), 'read_only' => false],
+];
+
+$args = [
+    // ex.: /usr/bin/heif-convert
+    $heifConvertPath,
+    $sourcePath,
+    $outputPath,
+];
+
+$wrapper = BubblewrapSandbox::run($args, $binds, dirname($sourcePath), null, 60);
+// use getErrorOutput() para stderr
+$output = $wrapper->getOutput();
+// $wrapper é ProcessWrapper (compatível com Process)
+```
+
+## Dicas para conversão HEIC
+
+- Garanta que `heif-convert` está acessível no host; exponha apenas as pastas necessárias.
+- Mantenha logs e trate `returnCode` como no exemplo original para identificar falhas.
+
+## Opções avançadas
+
+O método `run()` aceita um parâmetro adicional `$options` para configurações avançadas. Veja a documentação completa em [docs/PARAMETROS_RUN.md](PARAMETROS_RUN.md) para detalhes sobre todas as opções disponíveis.

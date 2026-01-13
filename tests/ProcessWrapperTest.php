@@ -1,0 +1,140 @@
+<?php
+
+namespace SecureRun\Tests;
+
+use BadMethodCallException;
+use SecureRun\ProcessWrapper;
+use Symfony\Component\Process\Process;
+use RuntimeException;
+
+class ProcessWrapperTest extends TestCase
+{
+    protected function makeProcess()
+    {
+        return new Process(array(PHP_BINARY, '-r', 'echo "test output";'), null, null, null, 5);
+    }
+
+    public function testGetEnvThrowsWhenNotEnabled()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, array('TEST' => 'value'), false);
+
+        $this->expectExceptionCompat(RuntimeException::class);
+        $wrapper->getEnv();
+    }
+
+    public function testGetEnvReturnsEnvWhenEnabled()
+    {
+        $env = array('TEST_VAR' => 'test_value', 'HOME' => '/tmp');
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, $env, true);
+
+        $result = $wrapper->getEnv();
+
+        $this->assertEquals($env, $result);
+    }
+
+    public function testGetEnvReturnsEmptyArrayWhenEnvIsNullAndEnabled()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, true);
+
+        $result = $wrapper->getEnv();
+
+        $this->assertIsArray($result);
+        $this->assertEmpty($result);
+    }
+
+    public function testIsEnvAccessEnabledReturnsTrueWhenEnabled()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, true);
+
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+    }
+
+    public function testIsEnvAccessEnabledReturnsFalseWhenDisabled()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        $this->assertFalse($wrapper->isEnvAccessEnabled());
+    }
+
+    public function testMagicCallDelegatesToProcess()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        // Test that wrapper delegates method calls to Process
+        $this->assertEquals(5, $wrapper->getTimeout());
+
+        // Run the process to test getOutput
+        $wrapper->run();
+        $this->assertEquals('test output', trim($wrapper->getOutput()));
+    }
+
+    public function testMagicCallThrowsForNonExistentMethod()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        $this->expectExceptionCompat(BadMethodCallException::class);
+        $wrapper->nonExistentMethod();
+    }
+
+    public function testSetEnvIsBlocked()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        $this->expectExceptionCompat(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Cannot modify environment variables/');
+        $wrapper->setEnv(array('BLOCKED' => 'value'));
+    }
+
+    public function testMagicGetPreventsAccessToInternalProperties()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        $this->expectExceptionCompat(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Cannot access internal property/');
+        $wrapper->process;
+    }
+
+    public function testMagicSetPreventsModificationOfInternalProperties()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        $this->expectExceptionCompat(RuntimeException::class);
+        $wrapper->env = array('test' => 'value');
+    }
+
+    public function testWrapperCanBeUsedAsProcess()
+    {
+        $process = $this->makeProcess();
+        $wrapper = new ProcessWrapper($process, null, false);
+
+        // Should be able to use wrapper like Process
+        $wrapper->run();
+        $this->assertEquals('test output', trim($wrapper->getOutput()));
+        $this->assertTrue($wrapper->isSuccessful());
+    }
+
+    public function testEnvIsIsolatedBetweenInstances()
+    {
+        $env1 = array('VAR1' => 'value1');
+        $env2 = array('VAR2' => 'value2');
+
+        $process1 = $this->makeProcess();
+        $wrapper1 = new ProcessWrapper($process1, $env1, true);
+
+        $process2 = $this->makeProcess();
+        $wrapper2 = new ProcessWrapper($process2, $env2, true);
+
+        $this->assertEquals($env1, $wrapper1->getEnv());
+        $this->assertEquals($env2, $wrapper2->getEnv());
+    }
+}

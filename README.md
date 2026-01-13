@@ -6,7 +6,7 @@ Security layer that forbids executing external commands without a bubblewrap san
 
 - Prevents RCE via unsafe `shell_exec/exec/system/passthru/proc_open`.
 - Isolates filesystem, environment variables, and network for the child process.
-- Compatible with Laravel 5.x to 12.x. Runtime code targets PHP 5.6+, but CI starts at PHP 7.x because the test suite uses anonymous classes (PHP 5.6 is not covered—use 7.x+ in production).
+- Compatible with Laravel 5.x to 12.x on PHP 7.0+ (Composer requirement). Runtime code sticks to older syntax for legacy apps, but tests and support start on PHP 7.x; use PHP 7+ (or newer) in production.
 - Runs on Linux only (bubblewrap is a Linux-specific sandbox).
 
 ## Installation
@@ -46,8 +46,15 @@ $binds = array(
     array('from' => storage_path('tmp'), 'to' => '/tmp', 'read_only' => false),
 );
 
-$process = $runner->run($command, $binds, '/tmp', null, 120);
-$output = $process->getOutput();
+$wrapper = $runner->run($command, $binds, '/tmp', null, 120);
+$output = $wrapper->getOutput(); // ProcessWrapper works like Process
+
+// Optional: access environment variables (when explicitly enabled)
+use SecureRun\RunOptions;
+$wrapper = $runner->run($command, $binds, '/tmp', ['VAR' => 'value'], 120, [
+    RunOptions::UNSECURE_ENV_ACCESS => true
+]);
+$env = $wrapper->getEnv(); // returns ['VAR' => 'value']
 ```
 
 Or via the Laravel facade (no `/Laravel` namespace anymore):
@@ -55,8 +62,8 @@ Or via the Laravel facade (no `/Laravel` namespace anymore):
 ```php
 use SecureRun\BubblewrapSandbox;
 
-$process = BubblewrapSandbox::run(['ls', '-la']);
-$output = $process->getOutput();
+$wrapper = BubblewrapSandbox::run(['ls', '-la']);
+$output = $wrapper->getOutput(); // ProcessWrapper is compatible with Process
 ```
 
 Note: `SecureRun\Sandbox\BubblewrapSandbox` remains as a backwards-compatible shim for apps that imported the old namespace. Prefer `SecureRun\BubblewrapSandbox` (or the `BubblewrapSandbox` alias).
@@ -64,6 +71,13 @@ Note: `SecureRun\Sandbox\BubblewrapSandbox` remains as a backwards-compatible sh
 ## Documentation
 
 - Quick usage guide: [docs/USING_SANDBOX.md](docs/USING_SANDBOX.md)
+- Run method parameters: [docs/PARAMETROS_RUN.md](docs/PARAMETROS_RUN.md)
+- Environment variables access examples: [docs/EXEMPLOS_ENV.md](docs/EXEMPLOS_ENV.md)
+
+### Advanced features
+
+- **RunOptions**: Centralized option constants for the `run()` method. Use `RunOptions::UNSECURE_ENV_ACCESS` instead of string literals to prevent typos.
+- **ProcessWrapper**: The `run()` method always returns `ProcessWrapper` (which is compatible with Symfony Process) for consistent return types. Environment variable access via `getEnv()` is only available when `unsecure_env_access` is explicitly enabled.
 
 ### Security rules enforced
 

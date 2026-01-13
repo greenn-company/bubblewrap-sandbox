@@ -3,6 +3,8 @@
 namespace SecureRun\Tests;
 
 use SecureRun\BubblewrapSandboxRunner;
+use SecureRun\RunOptions;
+use SecureRun\ProcessWrapper;
 use SecureRun\Exceptions\BubblewrapUnavailableException;
 use InvalidArgumentException;
 use Symfony\Component\Process\Process;
@@ -53,6 +55,24 @@ class BubblewrapSandboxTest extends TestCase
             BubblewrapSandboxRunner::defaultReadOnlyBinds(),
             BubblewrapSandboxRunner::defaultWritableBinds()
         );
+    }
+
+    /**
+     * Creates a mock sandbox that returns ProcessWrapper with given env access.
+     *
+     * @return BubblewrapSandboxRunner
+     */
+    protected function makeMockSandbox()
+    {
+        return new class(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        }) extends BubblewrapSandboxRunner {
+            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
+            {
+                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, $timeout);
+                return new ProcessWrapper($process, $env, $enableEnvAccess);
+            }
+        };
     }
 
     public function testBuildCommandIncludesBaseAndBinds()
@@ -153,16 +173,18 @@ class BubblewrapSandboxTest extends TestCase
         }
     }
 
-    public function testProcessBuildsProcessInstance()
+    public function testProcessBuildsProcessWrapperInstance()
     {
         $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
             // Skip binary validation in tests; handled elsewhere.
         });
-        $process = $sandbox->process(array('echo', 'hi'), array(), null, null, 10);
+        $wrapper = $sandbox->process(array('echo', 'hi'), array(), null, null, 10);
 
-        $this->assertInstanceOf(Process::class, $process);
-        $this->assertEquals(10, $process->getTimeout());
-        $this->assertNotFalse(strpos($process->getCommandLine(), 'echo'));
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertEquals(10, $wrapper->getTimeout());
+        $this->assertNotFalse(strpos($wrapper->getCommandLine(), 'echo'));
+        // Should not have env access enabled by default
+        $this->assertFalse($wrapper->isEnvAccessEnabled());
     }
 
     public function testRunUsesOverriddenProcess()
@@ -172,17 +194,19 @@ class BubblewrapSandboxTest extends TestCase
         }) extends BubblewrapSandboxRunner {
             public $called = false;
 
-            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60)
+            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
             {
                 $this->called = true;
-                return new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, 5);
+                $process = new Process(array(PHP_BINARY, '-r', 'echo "ok";'), null, null, null, 5);
+                return new ProcessWrapper($process, $env, $enableEnvAccess);
             }
         };
 
-        $process = $sandbox->run(array('ignored'));
+        $wrapper = $sandbox->run(array('ignored'));
 
         $this->assertTrue($sandbox->called);
-        $this->assertSame('ok', trim($process->getOutput()));
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertSame('ok', trim($wrapper->getOutput()));
     }
 
     public function testFromConfigBuildsWithProvidedValues()
@@ -392,6 +416,8 @@ class BubblewrapSandboxTest extends TestCase
     public function testFromConfigValidatesArrayTypes()
     {
         $config = array(
+            // Provide a known executable so the test doesn't depend on bubblewrap being installed.
+            'binary' => PHP_BINARY,
             'base_args' => 'not-an-array',
             'read_only_binds' => 'not-an-array',
             'write_binds' => 'not-an-array',
@@ -418,5 +444,283 @@ class BubblewrapSandboxTest extends TestCase
 
         $this->expectExceptionCompat(BubblewrapUnavailableException::class);
         $sandbox->buildCommand(array('echo', 'test'));
+    }
+
+    public function testRunReturnsProcessWrapperByDefault()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        $wrapper = $sandbox->run(array('echo', 'test'), array(), null, null, 5);
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertFalse($wrapper->isEnvAccessEnabled());
+        $this->assertEquals('ok', trim($wrapper->getOutput()));
+        
+        // Should throw exception when trying to access env without enabling it
+        try {
+            $wrapper->getEnv();
+            $this->fail('Expected RuntimeException when accessing env without enabling it');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Environment variable access is not enabled', $e->getMessage());
+        }
+    }
+
+    public function testRunReturnsProcessWrapperWithEnvAccessWhenEnabled()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        $env = array('TEST_VAR' => 'test_value', 'HOME' => '/tmp');
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            $env,
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => true)
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+        $this->assertEquals($env, $wrapper->getEnv());
+    }
+
+    public function testRunReturnsProcessWrapperWithEnvAccessWhenEnabledWithStringKey()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        $env = array('TEST_VAR' => 'test_value');
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            $env,
+            5,
+            array('unsecure_env_access' => true)
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+        $this->assertEquals($env, $wrapper->getEnv());
+    }
+
+    public function testRunReturnsProcessWrapperWithoutEnvAccessWhenDisabled()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            array('TEST_VAR' => 'value'),
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => false)
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertFalse($wrapper->isEnvAccessEnabled());
+        
+        // Should throw exception when trying to access env
+        try {
+            $wrapper->getEnv();
+            $this->fail('Expected RuntimeException when accessing env without enabling it');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Environment variable access is not enabled', $e->getMessage());
+        }
+    }
+
+    public function testRunRejectsInvalidOptionKey()
+    {
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        });
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->run(
+            array(PHP_BINARY, '-r', 'echo "ok";'),
+            array(),
+            null,
+            null,
+            5,
+            array('invalid_option' => true)
+        );
+    }
+
+    public function testRunRejectsNonBooleanForUnsecureEnvAccess()
+    {
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        });
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->run(
+            array(PHP_BINARY, '-r', 'echo "ok";'),
+            array(),
+            null,
+            null,
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => 1)
+        );
+    }
+
+    public function testRunRejectsStringTrueForUnsecureEnvAccess()
+    {
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        });
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->run(
+            array(PHP_BINARY, '-r', 'echo "ok";'),
+            array(),
+            null,
+            null,
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => 'true')
+        );
+    }
+
+    public function testRunRejectsNonStringOptionKey()
+    {
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        });
+
+        $this->expectExceptionCompat(InvalidArgumentException::class);
+        $sandbox->run(
+            array(PHP_BINARY, '-r', 'echo "ok";'),
+            array(),
+            null,
+            null,
+            5,
+            array(123 => true)
+        );
+    }
+
+    public function testRunWithEmptyOptionsReturnsProcessWrapper()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            array('TEST' => 'value'),
+            5,
+            array()
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertFalse($wrapper->isEnvAccessEnabled());
+    }
+
+    public function testRunProcessWrapperCanBeUsedAsProcess()
+    {
+        $sandbox = new class(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        }) extends BubblewrapSandboxRunner {
+            public function process(array $command, array $extraBinds = array(), $workingDirectory = null, array $env = null, $timeout = 60, $enableEnvAccess = false)
+            {
+                $process = new Process(array(PHP_BINARY, '-r', 'echo "test output";'), null, null, null, $timeout);
+                return new ProcessWrapper($process, $env, $enableEnvAccess);
+            }
+        };
+
+        $env = array('TEST_VAR' => 'test_value');
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            $env,
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => true)
+        );
+
+        // Should work as Process
+        $this->assertEquals('test output', trim($wrapper->getOutput()));
+        $this->assertTrue($wrapper->isSuccessful());
+
+        // Should also have env access
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+        $this->assertEquals($env, $wrapper->getEnv());
+    }
+
+    public function testRunProcessWrapperWithNullEnv()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            null,
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => true)
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+        $env = $wrapper->getEnv();
+        $this->assertTrue(is_array($env));
+        $this->assertEmpty($env);
+    }
+
+    public function testRunOptionsNormalizeWithDefaults()
+    {
+        $sandbox = $this->makeMockSandbox();
+
+        // Only provide unsecure_env_access, should merge with defaults
+        $wrapper = $sandbox->run(
+            array('echo', 'test'),
+            array(),
+            null,
+            array('TEST' => 'value'),
+            5,
+            array(RunOptions::UNSECURE_ENV_ACCESS => true)
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+        // Should work normally
+        $this->assertEquals('ok', trim($wrapper->getOutput()));
+    }
+
+    public function testProcessMethodReturnsProcessWrapperWithoutEnvAccess()
+    {
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        });
+
+        $wrapper = $sandbox->process(
+            array(PHP_BINARY, '-r', 'echo "ok";'),
+            array(),
+            null,
+            array('TEST' => 'value'),
+            5,
+            false
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertFalse($wrapper->isEnvAccessEnabled());
+    }
+
+    public function testProcessMethodWithWrapWithEnvTrue()
+    {
+        $sandbox = new BubblewrapSandboxRunner(PHP_BINARY, array(), array(), array(), function () {
+            // Skip binary validation in tests
+        });
+
+        $env = array('TEST_VAR' => 'test_value');
+        $wrapper = $sandbox->process(
+            array(PHP_BINARY, '-r', 'echo "ok";'),
+            array(),
+            null,
+            $env,
+            5,
+            true
+        );
+
+        $this->assertInstanceOf(ProcessWrapper::class, $wrapper);
+        $this->assertTrue($wrapper->isEnvAccessEnabled());
+        $this->assertEquals($env, $wrapper->getEnv());
     }
 }
