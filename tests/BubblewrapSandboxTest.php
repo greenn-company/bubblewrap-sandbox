@@ -248,14 +248,30 @@ class BubblewrapSandboxTest extends TestCase
     public function testDefaultReadOnlyBindsAddsLib64Conditionally()
     {
         $readOnly = BubblewrapSandboxRunner::defaultReadOnlyBinds();
-        $hasLib64 = is_dir('/lib64');
+        // /lib64 should only be included if it exists AND is not a symlink
+        $hasLib64RealDir = is_dir('/lib64') && !is_link('/lib64');
 
-        if ($hasLib64) {
+        if ($hasLib64RealDir) {
             $this->assertContains('/lib64', $readOnly);
-        }
-
-        if (!$hasLib64) {
+        } else {
             $this->assertNotContains('/lib64', $readOnly);
+        }
+    }
+
+    public function testDefaultReadOnlyBindsExcludesSymlinks()
+    {
+        $readOnly = BubblewrapSandboxRunner::defaultReadOnlyBinds();
+
+        // /usr should always be included
+        $this->assertContains('/usr', $readOnly);
+
+        // For /bin, /lib, /sbin: should only be included if they are real directories
+        foreach (array('/bin', '/lib', '/sbin') as $path) {
+            if (is_dir($path) && !is_link($path)) {
+                $this->assertContains($path, $readOnly, "{$path} should be included (real directory)");
+            } else {
+                $this->assertNotContains($path, $readOnly, "{$path} should NOT be included (symlink or missing)");
+            }
         }
     }
 
