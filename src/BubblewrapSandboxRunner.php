@@ -267,11 +267,14 @@ class BubblewrapSandboxRunner
     /**
      * Default bubblewrap base arguments.
      *
+     * On merged /usr systems (modern Ubuntu/Debian), creates symlinks inside
+     * the sandbox so that paths like /bin/bash and /lib/x86_64-linux-gnu work.
+     *
      * @return array<int,string>
      */
     public static function defaultBaseArgs()
     {
-        return array(
+        $args = array(
             '--unshare-all',
             '--die-with-parent',
             '--new-session',
@@ -289,26 +292,73 @@ class BubblewrapSandboxRunner
             '--chdir',
             '/tmp',
         );
+
+        // On merged /usr systems, create symlinks so /bin, /lib, /sbin paths work
+        if (is_link('/bin')) {
+            $args[] = '--symlink';
+            $args[] = 'usr/bin';
+            $args[] = '/bin';
+        }
+
+        if (is_link('/lib')) {
+            $args[] = '--symlink';
+            $args[] = 'usr/lib';
+            $args[] = '/lib';
+        }
+
+        if (is_link('/sbin')) {
+            $args[] = '--symlink';
+            $args[] = 'usr/sbin';
+            $args[] = '/sbin';
+        }
+
+        // /lib64 symlink if it exists as a symlink on the host
+        if (is_link('/lib64')) {
+            $target = readlink('/lib64');
+            if ($target !== false) {
+                $args[] = '--symlink';
+                $args[] = $target;
+                $args[] = '/lib64';
+            }
+        }
+
+        return $args;
     }
 
     /**
      * Default read-only bind mounts.
      *
+     * Modern Ubuntu/Debian systems use merged /usr where /lib, /bin, /sbin are
+     * symlinks to their /usr counterparts. We need to bind the real paths,
+     * not the symlinks, to avoid bwrap errors.
+     *
      * @return array<int,string>
      */
     public static function defaultReadOnlyBinds()
     {
-        $paths = array(
-            '/usr',
-            '/bin',
-            '/lib',
-            '/sbin',
-            '/etc/resolv.conf',
-            '/etc/ssl',
-        );
+        $paths = array('/usr');
 
-        if (is_dir('/lib64')) {
+        // For /bin, /lib, /sbin: only bind if they are real directories, not symlinks
+        // In merged /usr systems, these are symlinks to /usr/bin, /usr/lib, /usr/sbin
+        foreach (array('/bin', '/lib', '/sbin') as $path) {
+            if (is_dir($path) && !is_link($path)) {
+                $paths[] = $path;
+            }
+        }
+
+        // /lib64 exists on some 64-bit systems (Debian/Ubuntu x86_64)
+        // Only add if it's a real directory
+        if (is_dir('/lib64') && !is_link('/lib64')) {
             $paths[] = '/lib64';
+        }
+
+        // /etc paths needed for network and SSL
+        $paths[] = '/etc/resolv.conf';
+        $paths[] = '/etc/ssl';
+
+        // /etc/alternatives is needed for ffmpeg and other alternatives-managed binaries
+        if (is_dir('/etc/alternatives')) {
+            $paths[] = '/etc/alternatives';
         }
 
         return $paths;

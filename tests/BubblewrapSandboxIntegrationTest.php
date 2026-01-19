@@ -164,22 +164,15 @@ class BubblewrapSandboxIntegrationTest extends TestCase
             $readOnly[] = '/etc';
         }
 
-        $baseArgs = array(
-            '--unshare-all',
-            '--die-with-parent',
-            '--new-session',
-            '--proc',
-            '/proc',
-            '--dev',
-            '/dev',
-            '--tmpfs',
-            '/tmp',
-            '--setenv',
-            'PATH',
-            '/usr/bin:/bin:/usr/sbin:/sbin',
-            '--chdir',
-            '/home',
-        );
+        // Use defaultBaseArgs() to get symlinks for merged /usr systems,
+        // then override --chdir to /home for this specific test
+        $baseArgs = BubblewrapSandboxRunner::defaultBaseArgs();
+
+        // Find and replace --chdir /tmp with --chdir /home
+        $chdirIndex = array_search('--chdir', $baseArgs, true);
+        if ($chdirIndex !== false && isset($baseArgs[$chdirIndex + 1])) {
+            $baseArgs[$chdirIndex + 1] = '/home';
+        }
 
         $tempDir = sys_get_temp_dir() . '/sandbox-test-' . uniqid();
         if (!mkdir($tempDir)) {
